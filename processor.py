@@ -36,6 +36,8 @@ class DocumentProcessor:
         for page_num, page in enumerate(reader.pages, 1):
             try:
                 content = page.extract_text()
+                # Limpar e decodificar códigos Unicode
+                content = self._clean_extracted_text(content)
             except Exception as e:
                 content = f"[Erro ao extrair texto da página {page_num}: {str(e)}]"
             
@@ -134,6 +136,8 @@ class DocumentProcessor:
         for page_num, page in enumerate(reader.pages, 1):
             try:
                 content = page.extract_text()
+                # Limpar e decodificar códigos Unicode
+                content = self._clean_extracted_text(content)
                 
                 # Limitar tamanho de páginas muito grandes
                 if len(content) > MAX_PAGE_SIZE:
@@ -268,6 +272,42 @@ class DocumentProcessor:
                 break
         
         return chunks
+    
+    def _decode_unicode_codes(self, text: str) -> str:
+        """Decodifica códigos Unicode no formato /uniXXXX para caracteres reais
+        
+        Exemplo: /uni0020 -> espaço, /uni0069 -> 'i'
+        """
+        if not text or '/uni' not in text:
+            return text
+        
+        def replace_unicode(match):
+            hex_code = match.group(1)
+            try:
+                # Converter hex para int e depois para char Unicode
+                unicode_value = int(hex_code, 16)
+                return chr(unicode_value)
+            except (ValueError, OverflowError):
+                # Se não conseguir decodificar, manter o código original
+                return match.group(0)
+        
+        # Padrão: /uni seguido de 4 dígitos hexadecimais
+        pattern = r'/uni([0-9A-Fa-f]{4})'
+        return re.sub(pattern, replace_unicode, text)
+    
+    def _clean_extracted_text(self, text: str) -> str:
+        """Limpa e normaliza texto extraído do PDF"""
+        if not text:
+            return text
+        
+        # Primeiro, decodificar códigos Unicode
+        text = self._decode_unicode_codes(text)
+        
+        # Normalizar espaços em branco múltiplos
+        text = re.sub(r' +', ' ', text)
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        
+        return text
     
     def _extract_numero_processo(self, text: str) -> str:
         """Extrai número do processo"""

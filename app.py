@@ -797,10 +797,20 @@ with tab1:
                             
                             filename = os.path.basename(pdf_file)
                             
+                            # #region agent log
+                            debug_log("app.py:798", "INICIO_PROCESSAMENTO_DOCUMENTO", {"filename": filename, "idx": idx, "total_docs": total_docs}, "ALL")
+                            # #endregion
+                            
                             # Atualizar status para PROCESSANDO
                             try:
                                 components["file_manager"].update_status(filename, "PROCESSANDO")
-                            except:
+                                # #region agent log
+                                debug_log("app.py:802", "STATUS_ATUALIZADO_PROCESSANDO", {"filename": filename}, "ALL")
+                                # #endregion
+                            except Exception as e:
+                                # #region agent log
+                                debug_log("app.py:804", "ERRO_ATUALIZAR_STATUS_PROCESSANDO", {"filename": filename, "error": str(e)}, "ALL")
+                                # #endregion
                                 pass
                             
                             add_log(f"[{idx+1}/{total_docs}] Iniciando: {filename}")
@@ -813,23 +823,50 @@ with tab1:
                             doc = None
                             chunks_count = [0]
                             
+                            # #region agent log
+                            debug_log("app.py:811", "INICIO_VERIFICACAO_DOCUMENTO", {"filename": filename, "existing_file_data": existing_file_data is not None, "has_document_id": existing_file_data.get("document_id") if existing_file_data else None, "total_chunks_db": existing_file_data.get("total_chunks", 0) if existing_file_data else 0}, "ALL")
+                            # #endregion
+                            
                             # Verificar se já tem chunks no banco
                             if existing_file_data and existing_file_data.get("document_id") and existing_file_data.get("total_chunks", 0) > 0:
                                 document_id_existing = existing_file_data["document_id"]
                                 
+                                # #region agent log
+                                debug_log("app.py:818", "VERIFICANDO_CHUNKS_EXISTENTES", {"filename": filename, "document_id": document_id_existing, "total_chunks_db": existing_file_data.get("total_chunks", 0)}, "A")
+                                # #endregion
+                                
                                 # Verificar se chunks realmente existem no banco
-                                if components["vectorstore"].has_chunks(document_id=document_id_existing):
+                                has_chunks_result = components["vectorstore"].has_chunks(document_id=document_id_existing)
+                                
+                                # #region agent log
+                                debug_log("app.py:825", "VERIFICANDO_CHUNKS_VECTORSTORE", {"filename": filename, "document_id": document_id_existing, "has_chunks": has_chunks_result}, "ALL")
+                                # #endregion
+                                
+                                if has_chunks_result:
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: Chunks já existem no banco")
                                     chunks_count[0] = existing_file_data.get("total_chunks", 0)
                                     total_pages = existing_file_data.get("total_pages", 0)
                                     
+                                    # #region agent log
+                                    debug_log("app.py:831", "CHUNKS_CONFIRMADOS", {"filename": filename, "chunks_count": chunks_count[0], "total_pages": total_pages}, "D")
+                                    # #endregion
+                                    
                                     # VERIFICAR SE ANÁLISE JÁ EXISTE
                                     analysis_exists = components["storage"].has_analysis_by_filename(filename)
+                                    
+                                    # #region agent log
+                                    debug_log("app.py:835", "VERIFICACAO_ANALISE", {"filename": filename, "analysis_exists": analysis_exists}, "A")
+                                    # #endregion
+                                    
                                     if analysis_exists:
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Análise já existe, pulando processamento completo")
                                         # Pular processamento completo (chunks e análise já existem)
                                         doc = None
                                         chunks_count[0] = 0  # Não processar nada
+                                        
+                                        # #region agent log
+                                        debug_log("app.py:842", "PULANDO_PROCESSAMENTO_ANALISE_EXISTE", {"filename": filename, "doc": None, "chunks_count": chunks_count[0]}, "A")
+                                        # #endregion
                                     else:
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Chunks existem mas análise não existe, rodando apenas análise...")
                                         # Criar objeto doc simulado com o document_id existente para análise
@@ -841,10 +878,23 @@ with tab1:
                                             }
                                         }
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Reutilizando {chunks_count[0]} chunks existentes")
+                                        
+                                        # #region agent log
+                                        debug_log("app.py:855", "DOC_CRIADO_PARA_ANALISE", {"filename": filename, "doc": doc, "chunks_count": chunks_count[0]}, "B")
+                                        # #endregion
                                 else:
                                     # Document_id salvo mas chunks não existem mais, reprocessar
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: Document ID encontrado mas chunks não existem, reprocessando...")
+                                    
+                                    # #region agent log
+                                    debug_log("app.py:867", "CHUNKS_NAO_EXISTEM_REPROCESSAR", {"filename": filename, "document_id": document_id_existing}, "ALL")
+                                    # #endregion
+                                    
                                     doc = None
+                            
+                            # #region agent log
+                            debug_log("app.py:849", "ANTES_PROCESSAR_PDF", {"filename": filename, "doc_is_none": doc is None, "chunks_count": chunks_count[0]}, "ALL")
+                            # #endregion
                             
                             # Se não tem chunks, processar PDF
                             if doc is None:
@@ -873,10 +923,22 @@ with tab1:
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO no processamento - {str(proc_error)}", "ERROR")
                                     raise
                             
+                            # #region agent log
+                            debug_log("app.py:897", "ANTES_BLOCO_ANALISE", {"filename": filename, "doc": doc is not None, "chunks_count": chunks_count[0], "doc_id": doc.get("document_id") if doc else None, "doc_completo": str(doc)[:200] if doc else None}, "ALL")
+                            # #endregion
+                            
                             # Continuar com análise se tiver chunks OU se chunks já existem mas análise não
                             try:
+                                # #region agent log
+                                debug_log("app.py:901", "INICIO_VERIFICACAO_ANALISE", {"filename": filename, "doc": doc is not None, "chunks_count": chunks_count[0], "doc_id": doc.get("document_id") if doc else None}, "C")
+                                # #endregion
+                                
                                 # Verificar se deve pular (chunks e análise já existem)
                                 if doc is None and chunks_count[0] == 0:
+                                    # #region agent log
+                                    debug_log("app.py:879", "VERIFICANDO_PULAR", {"filename": filename, "doc_is_none": doc is None, "chunks_count_zero": chunks_count[0] == 0}, "E")
+                                    # #endregion
+                                    
                                     # Verificar se realmente tem chunks e análise
                                     if existing_file_data and existing_file_data.get("document_id"):
                                         document_id_existing = existing_file_data["document_id"]
@@ -885,6 +947,11 @@ with tab1:
                                             if analysis_exists:
                                                 # Pular completamente
                                                 add_log(f"[{idx+1}/{total_docs}] {filename}: Já totalmente processado, pulando...")
+                                                
+                                                # #region agent log
+                                                debug_log("app.py:887", "PULANDO_COMPLETO", {"filename": filename}, "E")
+                                                # #endregion
+                                                
                                                 # Atualizar status para CONCLUIDO se necessário
                                                 try:
                                                     current_status = components["file_manager"].get_by_filename(filename)
@@ -905,111 +972,153 @@ with tab1:
                                 
                                 # Análise automática
                                 # Se chunks_count[0] > 0 OU se doc existe (chunks já existem), fazer análise
-                                if chunks_count[0] > 0 or (doc is not None and doc.get("document_id")):
+                                condition_check = chunks_count[0] > 0 or (doc is not None and doc.get("document_id"))
+                                
+                                # #region agent log
+                                debug_log("app.py:908", "CONDICAO_ANALISE", {"filename": filename, "chunks_count": chunks_count[0], "doc_exists": doc is not None, "doc_id": doc.get("document_id") if doc else None, "condition_passed": condition_check}, "C")
+                                # #endregion
+                                
+                                if condition_check:
                                     # Se doc existe mas chunks_count é 0, significa que chunks já existem e vamos só analisar
                                     if doc and chunks_count[0] == 0:
                                         chunks_count[0] = existing_file_data.get("total_chunks", 0)
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Rodando apenas análise (chunks já existem)...")
+                                        
+                                        # #region agent log
+                                        debug_log("app.py:912", "ATUALIZANDO_CHUNKS_COUNT", {"filename": filename, "chunks_count_antes": 0, "chunks_count_depois": chunks_count[0]}, "D")
+                                        # #endregion
                                     
                                     if chunks_count[0] > 0:
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Iniciando análise RAG...")
                                         safe_update_progress(progress_bar, (idx + 0.7) / total_docs)
-                                    
-                                    try:
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Chamando GPT-4.1 para análise...")
                                         
-                                        analise_result, resposta_bruta = components["analyzer"].analyze_full_document_rag(
-                                            doc["document_id"],
-                                            filename,
-                                            return_raw_response=True
-                                        )
-                                        
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Análise GPT-4.1 concluída. Resposta: {len(resposta_bruta)} chars")
-                                        
-                                        # Mostrar resposta da IA
-                                        safe_streamlit_call(st.markdown, f"#### 🤖 Resposta da IA - {filename}")
-                                        try:
-                                            with st.expander("📄 Ver resposta completa", expanded=False):
-                                                safe_streamlit_call(st.markdown, resposta_bruta)
-                                        except Exception:
-                                            pass
-                                        
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Resposta exibida")
-                                        
-                                        safe_update_progress(progress_bar, (idx + 0.9) / total_docs)
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Salvando no banco...")
-                                        
-                                        # Tentar salvar com log detalhado
-                                        try:
-                                            components["storage"].save_analysis(**analise_result)
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Análise salva com sucesso")
-                                        except Exception as save_error:
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO ao salvar - {str(save_error)}", "ERROR")
-                                            raise
-                                        
-                                        # Contar campos extraídos
-                                        campos_extraidos = len([k for k in analise_result.keys() if k.startswith('p')])
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: {campos_extraidos} campos extraídos")
-                                        
-                                        # Mostrar número do processo
-                                        if analise_result.get('numero_processo'):
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Processo {analise_result.get('numero_processo')}")
-                                        else:
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: ATENÇÃO - Processo não identificado!", "WARNING")
-                                        
-                                        # Atualizar status para CONCLUIDO
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Atualizando status...")
                                         # #region agent log
-                                        debug_log("app.py:378", "ANTES update_status CONCLUIDO", {"filename": filename, "document_id": doc.get("document_id"), "chunks": chunks_count[0]}, "A")
+                                        debug_log("app.py:991", "INICIANDO_ANALISE_RAG", {"filename": filename, "chunks_count": chunks_count[0], "doc_id": doc.get("document_id") if doc else None}, "F")
                                         # #endregion
+                                        
                                         try:
-                                            status_result = components["file_manager"].update_status(
-                                                filename,
-                                                "CONCLUIDO",
-                                                document_id=doc["document_id"],
-                                                total_chunks=chunks_count[0],
-                                                total_pages=total_pages
-                                            )
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Chamando GPT-4.1 para análise...")
+                                            
                                             # #region agent log
-                                            debug_log("app.py:367", "DEPOIS update_status CONCLUIDO", {"filename": filename, "status_result": status_result is not None, "returned_status": status_result.get("status") if status_result else None}, "A")
+                                            debug_log("app.py:1000", "CHAMANDO_ANALYZER", {"filename": filename, "document_id": doc.get("document_id"), "filename_param": filename}, "F")
                                             # #endregion
-                                            if status_result:
-                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Status CONCLUIDO atualizado")
-                                            else:
-                                                add_log(f"[{idx+1}/{total_docs}] {filename}: AVISO - update_status retornou None", "WARNING")
+                                            
+                                            analise_result, resposta_bruta = components["analyzer"].analyze_full_document_rag(
+                                                doc["document_id"],
+                                                filename,
+                                                return_raw_response=True
+                                            )
+                                            
+                                            # #region agent log
+                                            debug_log("app.py:1010", "ANALYZER_RETORNOU", {"filename": filename, "tem_resultado": analise_result is not None, "tamanho_resposta": len(resposta_bruta) if resposta_bruta else 0}, "F")
+                                            # #endregion
+                                            
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Análise GPT-4.1 concluída. Resposta: {len(resposta_bruta)} chars")
+                                            
+                                            # Mostrar resposta da IA
+                                            safe_streamlit_call(st.markdown, f"#### 🤖 Resposta da IA - {filename}")
+                                            try:
+                                                with st.expander("📄 Ver resposta completa", expanded=False):
+                                                    safe_streamlit_call(st.markdown, resposta_bruta)
+                                            except Exception:
+                                                pass
+                                            
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Resposta exibida")
+                                            
+                                            safe_update_progress(progress_bar, (idx + 0.9) / total_docs)
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Salvando no banco...")
+                                            
+                                            # #region agent log
+                                            debug_log("app.py:994", "SALVANDO_ANALISE", {"filename": filename, "analise_result_keys": list(analise_result.keys())[:10] if analise_result else []}, "F")
+                                            # #endregion
+                                            
+                                            # Tentar salvar com log detalhado
+                                            try:
+                                                components["storage"].save_analysis(**analise_result)
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Análise salva com sucesso")
+                                                
                                                 # #region agent log
-                                                debug_log("app.py:371", "update_status retornou None", {"filename": filename}, "B")
+                                                debug_log("app.py:999", "ANALISE_SALVA_SUCESSO", {"filename": filename}, "F")
                                                 # #endregion
-                                        except Exception as status_error:
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO status - {str(status_error)}", "ERROR")
+                                            except Exception as save_error:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO ao salvar - {str(save_error)}", "ERROR")
+                                                # #region agent log
+                                                debug_log("app.py:1003", "ERRO_SALVAR_ANALISE", {"filename": filename, "error": str(save_error)}, "F")
+                                                # #endregion
+                                                raise
+                                            
+                                            # Contar campos extraídos
+                                            campos_extraidos = len([k for k in analise_result.keys() if k.startswith('p')])
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: {campos_extraidos} campos extraídos")
+                                            
+                                            # Mostrar número do processo
+                                            if analise_result.get('numero_processo'):
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Processo {analise_result.get('numero_processo')}")
+                                            else:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: ATENÇÃO - Processo não identificado!", "WARNING")
+                                            
+                                            # Atualizar status para CONCLUIDO
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Atualizando status...")
                                             # #region agent log
-                                            debug_log("app.py:376", "EXCEÇÃO update_status", {"filename": filename, "error": str(status_error)}, "C")
+                                            debug_log("app.py:1019", "ANTES update_status CONCLUIDO", {"filename": filename, "document_id": doc.get("document_id"), "chunks": chunks_count[0]}, "A")
                                             # #endregion
-                                        
-                                        safe_update_progress(progress_bar, (idx + 1) / total_docs)
-                                        add_log(f"[{idx+1}/{total_docs}] ✅ {filename} concluído!")
-                                        
-                                        safe_streamlit_call(st.success, f"✅ **{filename}** concluído! ({chunks_count[0]} chunks, {campos_extraidos} campos)")
-                                        
-                                    except Exception as e:
-                                        import traceback
-                                        error_msg = str(e)
-                                        tb_str = traceback.format_exc()
-                                        add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO DETALHADO:", "ERROR")
-                                        add_log(f"Mensagem: {error_msg}", "ERROR")
-                                        add_log(f"Traceback: {tb_str[:500]}", "ERROR")
-                                        try:
-                                            components["file_manager"].update_status(
-                                                filename,
-                                                "ERRO",
-                                                error_message=f"Erro análise: {error_msg[:200]}"
-                                            )
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Status ERRO atualizado", "INFO")
-                                        except Exception as status_error:
-                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Falha status - {str(status_error)}", "ERROR")
-                                        safe_streamlit_call(st.error, f"❌ **{filename}**: {error_msg}")
+                                            try:
+                                                status_result = components["file_manager"].update_status(
+                                                    filename,
+                                                    "CONCLUIDO",
+                                                    document_id=doc["document_id"],
+                                                    total_chunks=chunks_count[0],
+                                                    total_pages=total_pages
+                                                )
+                                                # #region agent log
+                                                debug_log("app.py:1028", "DEPOIS update_status CONCLUIDO", {"filename": filename, "status_result": status_result is not None, "returned_status": status_result.get("status") if status_result else None}, "A")
+                                                # #endregion
+                                                if status_result:
+                                                    add_log(f"[{idx+1}/{total_docs}] {filename}: Status CONCLUIDO atualizado")
+                                                else:
+                                                    add_log(f"[{idx+1}/{total_docs}] {filename}: AVISO - update_status retornou None", "WARNING")
+                                                    # #region agent log
+                                                    debug_log("app.py:1036", "update_status retornou None", {"filename": filename}, "B")
+                                                    # #endregion
+                                            except Exception as status_error:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO status - {str(status_error)}", "ERROR")
+                                                # #region agent log
+                                                debug_log("app.py:1041", "EXCEÇÃO update_status", {"filename": filename, "error": str(status_error)}, "C")
+                                                # #endregion
+                                            
+                                            safe_update_progress(progress_bar, (idx + 1) / total_docs)
+                                            add_log(f"[{idx+1}/{total_docs}] ✅ {filename} concluído!")
+                                            
+                                            safe_streamlit_call(st.success, f"✅ **{filename}** concluído! ({chunks_count[0]} chunks, {campos_extraidos} campos)")
+                                            
+                                        except Exception as e:
+                                            import traceback
+                                            error_msg = str(e)
+                                            tb_str = traceback.format_exc()
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO DETALHADO:", "ERROR")
+                                            add_log(f"Mensagem: {error_msg}", "ERROR")
+                                            add_log(f"Traceback: {tb_str[:500]}", "ERROR")
+                                            try:
+                                                components["file_manager"].update_status(
+                                                    filename,
+                                                    "ERRO",
+                                                    error_message=f"Erro análise: {error_msg[:200]}"
+                                                )
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Status ERRO atualizado", "INFO")
+                                            except Exception as status_error:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Falha status - {str(status_error)}", "ERROR")
+                                            safe_streamlit_call(st.error, f"❌ **{filename}**: {error_msg}")
+                                    else:
+                                        # #region agent log
+                                        debug_log("app.py:1095", "CHUNKS_COUNT_ZERO_NAO_ANALISA", {"filename": filename, "chunks_count": chunks_count[0]}, "ALL")
+                                        # #endregion
                                 else:
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: Nenhum chunk criado", "WARNING")
+                                    
+                                    # #region agent log
+                                    debug_log("app.py:1011", "NENHUM_CHUNK_CRIADO", {"filename": filename, "chunks_count": chunks_count[0], "doc": doc is not None}, "C")
+                                    # #endregion
+                                    
                                     try:
                                         components["file_manager"].update_status(
                                             filename,

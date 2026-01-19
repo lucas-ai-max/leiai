@@ -2,6 +2,7 @@ from supabase import create_client, Client
 from typing import Dict, List, Optional
 from config import settings
 from datetime import datetime
+import logging
 
 class FileManager:
     """Gerenciador de arquivos no Supabase"""
@@ -11,6 +12,29 @@ class FileManager:
             settings.SUPABASE_URL,
             settings.SUPABASE_KEY
         )
+        self.logger = logging.getLogger(__name__)
+    
+    def _is_cloudflare_error(self, error: Exception) -> bool:
+        """Verifica se o erro é relacionado ao Cloudflare/Supabase"""
+        error_str = str(error).lower()
+        return any(keyword in error_str for keyword in [
+            'cloudflare', 
+            'bad request', 
+            'json could not be generated',
+            '400'
+        ])
+    
+    def _log_error(self, message: str, filename: str = None, error: Exception = None):
+        """Loga erro de forma controlada, suprimindo erros conhecidos do Cloudflare"""
+        if error and self._is_cloudflare_error(error):
+            # Para erros do Cloudflare, apenas logar em nível DEBUG para não poluir o terminal
+            self.logger.debug(f"{message} (erro temporário de conexão)")
+        else:
+            # Para outros erros, logar normalmente
+            if filename:
+                self.logger.warning(f"{message}: {filename}")
+            else:
+                self.logger.warning(message)
     
     def register_file(self, filename: str, file_size_mb: float, caminho_original: str) -> Optional[Dict]:
         """Registra novo arquivo para processamento com retry"""
@@ -40,16 +64,18 @@ class FileManager:
                         return existing
                     return None
                 
-                # Retry em caso de erro de conexão
+                # Retry em caso de erro de conexão com backoff exponencial
                 if attempt < max_retries - 1:
                     import time
-                    time.sleep(1)
+                    wait_time = 2 ** (attempt + 1)  # Backoff exponencial: 2s, 4s
+                    time.sleep(wait_time)
                     continue
                 
                 # Se falhar todas as tentativas, tentar buscar se já existe
                 existing = self.get_by_filename(filename)
                 if existing:
                     return existing
+                self._log_error(f"Erro ao registrar arquivo após {max_retries} tentativas", filename, e)
                 return None
     
     def update_status(self, filename: str, status: str, 
@@ -58,7 +84,7 @@ class FileManager:
                      total_chunks: int = None,
                      total_pages: int = None,
                      existing_data: Dict = None):
-        """Atualiza status do arquivo"""
+        """Atualiza status do arquivo com retry e backoff exponencial"""
         update_data = {
             "status": status,
             "updated_at": datetime.now().isoformat()
@@ -83,8 +109,9 @@ class FileManager:
         elif status in ["CONCLUIDO", "ERRO", "JA_PROCESSADO"]:
             update_data["completed_at"] = datetime.now().isoformat()
         
-        # Retry em caso de erro de conexão
+        # Retry em caso de erro de conexão com backoff exponencial
         max_retries = 3
+        import time
         for attempt in range(max_retries):
             try:
                 result = self.supabase.table(settings.TABLE_GERENCIAMENTO)\
@@ -95,16 +122,18 @@ class FileManager:
                 return result.data[0] if result.data else None
             except Exception as e:
                 if attempt < max_retries - 1:
-                    import time
-                    time.sleep(1)  # Aguardar 1 segundo antes de tentar novamente
+                    # Backoff exponencial: 2s, 4s
+                    wait_time = 2 ** (attempt + 1)
+                    time.sleep(wait_time)
                     continue
                 # Se falhar todas as tentativas, logar mas não quebrar
-                print(f"Erro ao atualizar status de {filename} após {max_retries} tentativas: {str(e)}")
+                self._log_error(f"Erro ao atualizar status após {max_retries} tentativas", filename, e)
                 return None
     
     def get_by_filename(self, filename: str) -> Optional[Dict]:
-        """Busca arquivo por nome com retry"""
+        """Busca arquivo por nome com retry e backoff exponencial"""
         max_retries = 3
+        import time
         for attempt in range(max_retries):
             try:
                 result = self.supabase.table(settings.TABLE_GERENCIAMENTO)\
@@ -115,16 +144,18 @@ class FileManager:
                 return result.data[0] if result.data else None
             except Exception as e:
                 if attempt < max_retries - 1:
-                    import time
-                    time.sleep(1)  # Aguardar 1 segundo antes de tentar novamente
+                    # Backoff exponencial: 2s, 4s
+                    wait_time = 2 ** (attempt + 1)
+                    time.sleep(wait_time)
                     continue
-                # Se falhar todas as tentativas, retornar None
-                print(f"Erro ao buscar {filename} após {max_retries} tentativas: {str(e)}")
+                # Se falhar todas as tentativas, logar e retornar None
+                self._log_error(f"Erro ao buscar após {max_retries} tentativas", filename, e)
                 return None
     
     def get_all(self, status: Optional[str] = None) -> List[Dict]:
-        """Lista todos os arquivos com retry"""
+        """Lista todos os arquivos com retry e backoff exponencial"""
         max_retries = 3
+        import time
         for attempt in range(max_retries):
             try:
                 query = self.supabase.table(settings.TABLE_GERENCIAMENTO).select("*")
@@ -136,11 +167,12 @@ class FileManager:
                 return result.data if result.data else []
             except Exception as e:
                 if attempt < max_retries - 1:
-                    import time
-                    time.sleep(1)
+                    # Backoff exponencial: 2s, 4s
+                    wait_time = 2 ** (attempt + 1)
+                    time.sleep(wait_time)
                     continue
-                # Se falhar, retornar lista vazia
-                print(f"Erro ao buscar arquivos após {max_retries} tentativas: {str(e)}")
+                # Se falhar, logar e retornar lista vazia
+                self._log_error(f"Erro ao buscar arquivos após {max_retries} tentativas", error=e)
                 return []
     
     def is_processed(self, filename: str) -> bool:
@@ -152,8 +184,9 @@ class FileManager:
         return status in ["CONCLUIDO", "JA_PROCESSADO"]
     
     def reset_errors(self):
-        """Reseta arquivos com erro para PENDENTE com retry"""
+        """Reseta arquivos com erro para PENDENTE com retry e backoff exponencial"""
         max_retries = 3
+        import time
         for attempt in range(max_retries):
             try:
                 result = self.supabase.table(settings.TABLE_GERENCIAMENTO)\
@@ -164,8 +197,9 @@ class FileManager:
                 return len(result.data) if result.data else 0
             except Exception as e:
                 if attempt < max_retries - 1:
-                    import time
-                    time.sleep(1)
+                    # Backoff exponencial: 2s, 4s
+                    wait_time = 2 ** (attempt + 1)
+                    time.sleep(wait_time)
                     continue
-                print(f"Erro ao resetar erros após {max_retries} tentativas: {str(e)}")
+                self._log_error(f"Erro ao resetar erros após {max_retries} tentativas", error=e)
                 return 0
