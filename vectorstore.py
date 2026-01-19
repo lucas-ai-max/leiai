@@ -40,7 +40,7 @@ class VectorStore:
         return cleaned.strip()
     
     def store_chunks(self, chunks: List[Dict]):
-        """Armazena chunks com embeddings em paralelo"""
+        """Armazena chunks com embeddings em paralelo, evitando duplicações"""
         
         # Limpar conteúdo de cada chunk e filtrar vazios
         cleaned_chunks = []
@@ -60,16 +60,36 @@ class VectorStore:
         # Obter document_id do primeiro chunk (todos devem ter o mesmo)
         new_document_id = cleaned_chunks[0]["document_id"]
         
+        # Verificar quais chunks já existem para evitar duplicação
+        existing_chunk_ids = self.get_existing_chunk_ids(new_document_id)
+        
+        # Filtrar chunks que já existem
+        new_chunks = []
+        skipped_count = 0
+        for chunk in cleaned_chunks:
+            chunk_id = chunk["chunk_id"]
+            if chunk_id in existing_chunk_ids:
+                skipped_count += 1
+                continue
+            new_chunks.append(chunk)
+        
+        if skipped_count > 0:
+            print(f"Aviso: {skipped_count} chunk(s) já existem para document_id {new_document_id}, serão ignorados")
+        
+        if not new_chunks:
+            print(f"Todos os {len(cleaned_chunks)} chunks já existem para document_id {new_document_id}. Nada a inserir.")
+            return
+        
         # Aplicar limite de documentos (remover os mais antigos se necessário)
         self.enforce_document_limit(new_document_id)
         
-        # Criar embeddings em batch (rápido)
-        texts = [chunk["content"] for chunk in cleaned_chunks]
+        # Criar embeddings apenas para os novos chunks
+        texts = [chunk["content"] for chunk in new_chunks]
         embeddings = self._create_embeddings_batch(texts)
         
-        # Preparar registros
+        # Preparar registros apenas para chunks novos
         records = []
-        for chunk, embedding in zip(cleaned_chunks, embeddings):
+        for chunk, embedding in zip(new_chunks, embeddings):
             # Só incluir se tiver embedding válido
             if embedding:
                 records.append({
@@ -83,6 +103,7 @@ class VectorStore:
         
         # Inserir em batch com delay antes para não sobrecarregar o banco
         if records:
+            print(f"Inserindo {len(records)} novo(s) chunk(s) para document_id {new_document_id}")
             # Pequeno delay antes de inserir para evitar sobrecarga
             time.sleep(0.5)
             self._insert_batch(records)
@@ -168,7 +189,46 @@ class VectorStore:
                         time.sleep(delay_between_batches)
                     break  # Sucesso, sair do loop de retry
                 except APIError as e:
+                    error_str = str(e).lower()
                     error_code = e.code if hasattr(e, 'code') else str(getattr(e, 'message', {}))
+                    
+                    # Verificar se é erro de duplicação (unique constraint violation)
+                    # Códigos comuns: 23505 (PostgreSQL unique violation)
+                    is_duplicate = (error_code == '23505' or 
+                                  'unique' in error_str or 
+                                  'duplicate' in error_str or
+                                  '23505' in str(error_code))
+                    
+                    if is_duplicate:
+                        print(f"Aviso: Tentativa de inserir chunks duplicados (batch {i//batch_size + 1}). Filtrando duplicatas...")
+                        
+                        # Tentar inserir cada registro individualmente para identificar e pular duplicatas
+                        success_count = 0
+                        for record in batch:
+                            try:
+                                self.supabase.table(settings.TABLE_EMBEDDINGS).insert(record).execute()
+                                success_count += 1
+                            except APIError as e2:
+                                error_str2 = str(e2).lower()
+                                error_code2 = e2.code if hasattr(e2, 'code') else None
+                                is_dup2 = (error_code2 == '23505' or 
+                                          'unique' in error_str2 or 
+                                          'duplicate' in error_str2 or
+                                          '23505' in str(error_code2))
+                                if is_dup2:
+                                    # Duplicata, pular silenciosamente
+                                    continue
+                                else:
+                                    # Outro erro, logar
+                                    print(f"Erro ao inserir registro individual: {e2}")
+                        
+                        if success_count > 0:
+                            print(f"Inseridos {success_count}/{len(batch)} registros do batch (outros eram duplicatas)")
+                        
+                        inserted = True
+                        if i + batch_size < len(records):
+                            time.sleep(delay_between_batches)
+                        break  # Considerar como sucesso (duplicatas foram ignoradas)
                     
                     # Se for timeout (57014) e ainda houver tentativas
                     if error_code == '57014' and attempt < max_retries - 1:
@@ -290,6 +350,21 @@ class VectorStore:
         except Exception as e:
             print(f"Erro ao verificar chunks: {e}")
             return False
+    
+    def get_existing_chunk_ids(self, document_id: str) -> set:
+        """Retorna um set com os chunk_ids que já existem para um document_id"""
+        try:
+            result = self.supabase.table(settings.TABLE_EMBEDDINGS)\
+                .select("chunk_id")\
+                .eq("document_id", document_id)\
+                .execute()
+            
+            if result.data:
+                return {chunk["chunk_id"] for chunk in result.data}
+            return set()
+        except Exception as e:
+            print(f"Erro ao buscar chunk_ids existentes: {e}")
+            return set()
     
     def get_document_id_by_filename(self, filename: str) -> str:
         """Retorna o document_id associado a um filename (se existir)"""
