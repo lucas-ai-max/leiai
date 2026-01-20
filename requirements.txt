@@ -1,0 +1,9 @@
+openai>=1.0.0
+supabase>=2.0.0
+streamlit>=1.30.0
+python-dotenv
+pandas
+tiktoken
+tqdm
+pydantic-settings
+PyMuPDF>=1.23.0
