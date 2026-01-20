@@ -36,6 +36,7 @@ class ResponseStorage:
             analisado_por: Nome de quem analisou
             **kwargs: Campos de perguntas (p1_1_resposta, p1_1_justificativa, etc.)
         """
+<<<<<<< HEAD
         print(f"🟣 [STORAGE] save_analysis: Iniciando salvamento")
         print(f"🟣 [STORAGE] numero_processo: {numero_processo}")
         print(f"🟣 [STORAGE] arquivo_original: {arquivo_original}")
@@ -50,6 +51,12 @@ class ResponseStorage:
         else:
             print(f"🟣 [STORAGE] Nenhuma análise existente, criando nova...")
         
+=======
+        
+        # Verificar se já existe análise para este processo E arquivo
+        existing = self.get_by_numero_processo_and_file(numero_processo, arquivo_original)
+        
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         record = {
             "numero_processo": numero_processo,
             "arquivo_original": arquivo_original,
@@ -64,6 +71,7 @@ class ResponseStorage:
         }
         
         # Remover None values
+<<<<<<< HEAD
         record_before = len(record)
         record = {k: v for k, v in record.items() if v is not None}
         record_after = len(record)
@@ -109,6 +117,25 @@ class ResponseStorage:
             import traceback
             print(f"❌ [STORAGE] Traceback: {traceback.format_exc()}")
             raise
+=======
+        record = {k: v for k, v in record.items() if v is not None}
+        
+        if existing:
+            # Atualizar registro existente (mesmo processo e arquivo)
+            result = self.supabase.table(settings.TABLE_RESPOSTAS)\
+                .update(record)\
+                .eq("numero_processo", numero_processo)\
+                .eq("arquivo_original", arquivo_original)\
+                .execute()
+            return result.data[0] if result.data else None
+        else:
+            # Criar novo registro
+            record["status_analise"] = "CONCLUIDO"
+            result = self.supabase.table(settings.TABLE_RESPOSTAS)\
+                .insert(record)\
+                .execute()
+            return result.data[0] if result.data else None
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     
     def save_question_answer(self,
                             numero_processo: str,

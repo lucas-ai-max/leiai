@@ -94,6 +94,7 @@ RESPOSTA:"""
             filename: Nome do arquivo
             prompt_file: Caminho para arquivo com prompt completo
         """
+<<<<<<< HEAD
         print(f"🟡 [ANALYZER] analyze_full_document_rag: Iniciando análise RAG")
         print(f"🟡 [ANALYZER] document_id: {document_id}")
         print(f"🟡 [ANALYZER] filename: {filename}")
@@ -113,6 +114,16 @@ RESPOSTA:"""
             print(f"✅ [ANALYZER] Prompt carregado: {prompt_len} caracteres")
         except FileNotFoundError:
             print(f"❌ [ANALYZER] ERRO: Arquivo {prompt_file} não encontrado")
+=======
+        if not self.vectorstore:
+            raise ValueError("VectorStore não inicializado. Passe vectorstore no __init__")
+        
+        # Carregar prompt
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                full_prompt_template = f.read()
+        except FileNotFoundError:
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             raise FileNotFoundError(f"Arquivo {prompt_file} não encontrado")
         
         # Queries para busca RAG - cobrem todos os temas das perguntas
@@ -183,11 +194,15 @@ RESPOSTA:"""
         ]
         
         # Buscar chunks relevantes usando RAG (múltiplas queries para cobrir todos os temas)
+<<<<<<< HEAD
         print(f"🟡 [ANALYZER] Iniciando busca RAG com {len(rag_queries)} queries temáticas")
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         all_relevant_chunks = []
         seen_chunk_ids = set()
         
         # Buscar chunks para cada query temática
+<<<<<<< HEAD
         for query_idx, query in enumerate(rag_queries, 1):
             if query_idx <= 5 or query_idx % 10 == 0:  # Log a cada 10 queries para não poluir
                 print(f"🟡 [ANALYZER] Buscando chunks para query {query_idx}/{len(rag_queries)}: '{query[:50]}...'")
@@ -198,11 +213,17 @@ RESPOSTA:"""
                 print(f"🟡 [ANALYZER] Query {query_idx}: {len(chunks)} chunks encontrados")
             
             new_chunks_count = 0
+=======
+        for query in rag_queries:
+            chunks = self.vectorstore.search(query, document_id=document_id, limit=10)
+            
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             for chunk in chunks:
                 chunk_id = chunk.get('id')
                 if chunk_id and chunk_id not in seen_chunk_ids:
                     all_relevant_chunks.append(chunk)
                     seen_chunk_ids.add(chunk_id)
+<<<<<<< HEAD
                     new_chunks_count += 1
             
             if query_idx <= 5 or query_idx % 10 == 0 and new_chunks_count > 0:
@@ -213,6 +234,11 @@ RESPOSTA:"""
         # Se não encontrou chunks suficientes, buscar mais genericamente
         if len(all_relevant_chunks) < 50:
             print(f"⚠️ [ANALYZER] Poucos chunks encontrados ({len(all_relevant_chunks)} < 50), buscando genericamente...")
+=======
+        
+        # Se não encontrou chunks suficientes, buscar mais genericamente
+        if len(all_relevant_chunks) < 50:
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             generic_queries = [
                 "sentença decisão acórdão",
                 "juiz desembargador vara trabalho",
@@ -220,17 +246,23 @@ RESPOSTA:"""
                 "fundamentação jurídica artigo lei"
             ]
             
+<<<<<<< HEAD
             for gen_query_idx, query in enumerate(generic_queries, 1):
                 print(f"🟡 [ANALYZER] Busca genérica {gen_query_idx}/{len(generic_queries)}: '{query}'")
                 chunks = self.vectorstore.search(query, document_id=document_id, limit=20)
                 print(f"🟡 [ANALYZER] Busca genérica {gen_query_idx}: {len(chunks)} chunks retornados")
                 
                 new_chunks = 0
+=======
+            for query in generic_queries:
+                chunks = self.vectorstore.search(query, document_id=document_id, limit=20)
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                 for chunk in chunks:
                     chunk_id = chunk.get('id')
                     if chunk_id and chunk_id not in seen_chunk_ids:
                         all_relevant_chunks.append(chunk)
                         seen_chunk_ids.add(chunk_id)
+<<<<<<< HEAD
                         new_chunks += 1
                         if len(all_relevant_chunks) >= 100:  # Limite razoável
                             break
@@ -260,6 +292,23 @@ RESPOSTA:"""
         
         # Montar prompt final
         print(f"🟡 [ANALYZER] Montando prompt final...")
+=======
+                        if len(all_relevant_chunks) >= 100:  # Limite razoável
+                            break
+                if len(all_relevant_chunks) >= 100:
+                    break
+        
+        if not all_relevant_chunks:
+            raise ValueError(f"Nenhum chunk encontrado para documento {document_id}")
+        
+        # Ordenar chunks por página para manter ordem lógica
+        all_relevant_chunks.sort(key=lambda x: (x.get('page_number', 0), x.get('chunk_id', 0)))
+        
+        # Construir contexto com chunks relevantes
+        context = self._build_context(all_relevant_chunks)
+        
+        # Montar prompt final
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         prompt_with_context = f"""{full_prompt_template}
 
 # DOCUMENTO PARA ANÁLISE
@@ -270,6 +319,7 @@ RESPOSTA:"""
 
 Agora analise o documento acima e forneça as respostas no formato especificado."""
         
+<<<<<<< HEAD
         final_prompt_len = len(prompt_with_context)
         print(f"✅ [ANALYZER] Prompt final montado: {final_prompt_len} caracteres ({final_prompt_len/1000:.2f}K chars)")
         
@@ -324,6 +374,27 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
         print(f"🟡 [ANALYZER] filename: {filename}")
         print(f"🟡 [ANALYZER] chunks disponíveis: {len(chunks)}")
         
+=======
+        # Chamar GPT-4.1
+        response = self.client.chat.completions.create(
+            model=settings.MODEL_O1,
+            messages=[
+                {"role": "user", "content": prompt_with_context}
+            ]
+        )
+        
+        answer = response.choices[0].message.content
+        
+        # Parsear resposta estruturada
+        parsed_data = self._parse_analysis_response(answer, filename, all_relevant_chunks)
+        
+        if return_raw_response:
+            return parsed_data, answer
+        return parsed_data
+    
+    def _parse_analysis_response(self, response_text: str, filename: str, chunks: List[Dict]) -> Dict:
+        """Extrai dados estruturados da resposta do o1"""
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         import re
         
         data = {
@@ -333,6 +404,7 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
         }
         
         # Extrair identificação
+<<<<<<< HEAD
         print(f"🟡 [ANALYZER] Extraindo identificação (JUIZ, NUMERO_PROCESSO, etc.)...")
         juiz_match = re.search(r'\*\*JUIZ:\*\*\s*(.+)', response_text)
         if juiz_match:
@@ -340,13 +412,21 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
             print(f"✅ [ANALYZER] JUIZ extraído: {data['juiz']}")
         else:
             print(f"⚠️ [ANALYZER] JUIZ não encontrado na resposta")
+=======
+        juiz_match = re.search(r'\*\*JUIZ:\*\*\s*(.+)', response_text)
+        if juiz_match:
+            data["juiz"] = juiz_match.group(1).strip()
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         
         num_proc_match = re.search(r'\*\*NUMERO_PROCESSO:\*\*\s*(\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4})', response_text)
         if num_proc_match:
             data["numero_processo"] = num_proc_match.group(1).strip()
+<<<<<<< HEAD
             print(f"✅ [ANALYZER] NUMERO_PROCESSO extraído: {data['numero_processo']}")
         else:
             print(f"⚠️ [ANALYZER] NUMERO_PROCESSO não encontrado na resposta")
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         
         data_dec_match = re.search(r'\*\*DATA_DECISAO:\*\*\s*(\d{4}-\d{2}-\d{2})', response_text)
         if data_dec_match:
@@ -386,14 +466,20 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
             data["decisao_referencia"] = decisao_referencia_match.group(1).strip()
         
         # Extrair todas as respostas (p1_1_resposta, p1_1_justificativa, etc.)
+<<<<<<< HEAD
         print(f"🟡 [ANALYZER] Extraindo campos de perguntas (p1_1_resposta, p1_1_justificativa, etc.)...")
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         # Padrão CORRIGIDO: usar p literal (não [p]), e múltiplas estratégias
         # Estratégia 1: padrão específico com lookahead para próximo campo
         pattern = r'\*\*(p\d+_\d+_(?:resposta|justificativa|referencia)):\*\*\s*\n(.*?)(?=\n\*\*p\d+_\d+_|\n---|\n##|\Z)'
         matches = list(re.finditer(pattern, response_text, re.DOTALL | re.MULTILINE))
         
+<<<<<<< HEAD
         print(f"🟡 [ANALYZER] Estratégia 1: {len(matches)} matches encontrados")
         
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         extracted_fields = []
         for match in matches:
             campo = match.group(1).strip()
@@ -403,6 +489,7 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
             if campo.startswith('p') and ('_resposta' in campo or '_justificativa' in campo or '_referencia' in campo):
                 data[campo] = valor
                 extracted_fields.append(campo)
+<<<<<<< HEAD
                 if len(extracted_fields) <= 5:  # Log apenas os primeiros 5
                     print(f"✅ [ANALYZER] Campo extraído: {campo} (valor: {len(valor)} chars)")
         
@@ -426,6 +513,22 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
                 matches2.extend(matches3)
             
             new_fields_count = 0
+=======
+        
+        # Se não encontrou suficientes, tentar padrão mais flexível
+        if len(extracted_fields) < 30:
+            # Estratégia 2: padrão sem lookahead específico
+            pattern2 = r'\*\*(p\d+_\d+_(?:resposta|justificativa|referencia)):\*\*\s*\n?(.*?)(?=\n\*\*p\d+_|\n\*\*[A-Z]|\n---|\n##|\Z)'
+            matches2 = list(re.finditer(pattern2, response_text, re.DOTALL | re.MULTILINE))
+            
+            # Se ainda não encontrou, tentar padrão ainda mais flexível
+            if len(extracted_fields) < 20:
+                # Estratégia 3: qualquer campo que comece com **p e tenha números
+                pattern3 = r'\*\*(p\d+_\d+_(?:resposta|justificativa|referencia)):\*\*\s*\n?(.*?)(?=\n\*\*[a-zA-Z]|\n---|\n##|\Z)'
+                matches3 = list(re.finditer(pattern3, response_text, re.DOTALL | re.MULTILINE))
+                matches2.extend(matches3)
+            
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             for match in matches2:
                 campo = match.group(1).strip()
                 valor = match.group(2).strip()
@@ -438,6 +541,7 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
                         if valor_limpo and valor_limpo != "Não foi possível obter parâmetros para resposta":
                             data[campo] = valor_limpo
                             extracted_fields.append(campo)
+<<<<<<< HEAD
                             new_fields_count += 1
                             if new_fields_count <= 5:  # Log apenas os primeiros 5 novos
                                 print(f"✅ [ANALYZER] Campo extraído (estratégia 2/3): {campo} (valor: {len(valor_limpo)} chars)")
@@ -448,5 +552,7 @@ Agora analise o documento acima e forneça as respostas no formato especificado.
         total_data_keys = len(data.keys())
         print(f"✅ [ANALYZER] Parseamento concluído: {total_fields} campos de perguntas extraídos, {total_data_keys} campos totais no resultado")
         print(f"🟡 [ANALYZER] Campos totais no data: {list(data.keys())[:15]}... (mostrando primeiros 15)")
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         
         return data

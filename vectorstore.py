@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 from openai import OpenAI
 from supabase import create_client, Client
 from typing import List, Dict
@@ -9,6 +12,7 @@ from postgrest.exceptions import APIError
 import json
 import re
 import time
+<<<<<<< HEAD
 import sys
 
 # Configurar encoding UTF-8 para Windows (evita erro com emojis)
@@ -21,6 +25,8 @@ if sys.platform == 'win32':
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     except:
         pass  # Ignorar se já estiver configurado
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 
 class VectorStore:
     """Gerenciador de embeddings otimizado"""
@@ -55,6 +61,7 @@ class VectorStore:
     
     def store_chunks(self, chunks: List[Dict]):
         """Armazena chunks com embeddings em paralelo"""
+<<<<<<< HEAD
         print(f"🔵 [VECTORSTORE] ════════════════════════════════════════════════════════")
         print(f"🔵 [VECTORSTORE] store_chunks CHAMADO! Recebidos {len(chunks)} chunks")
         if chunks:
@@ -75,11 +82,20 @@ class VectorStore:
             
             if original_content_len != cleaned_content_len:
                 print(f"🔵 [VECTORSTORE] Conteúdo limpo: {original_content_len} -> {cleaned_content_len} caracteres")
+=======
+        
+        # Limpar conteúdo de cada chunk e filtrar vazios
+        cleaned_chunks = []
+        for chunk in chunks:
+            cleaned_chunk = chunk.copy()
+            cleaned_content = self._clean_text(chunk["content"])
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             
             # Só incluir chunks com conteúdo válido
             if cleaned_content and cleaned_content.strip():
                 cleaned_chunk["content"] = cleaned_content
                 cleaned_chunks.append(cleaned_chunk)
+<<<<<<< HEAD
                 print(f"✅ [VECTORSTORE] Chunk {idx+1} válido: {cleaned_content_len} chars")
             else:
                 print(f"⚠️ [VECTORSTORE] Chunk {idx+1} descartado: conteúdo vazio ou inválido")
@@ -122,12 +138,30 @@ class VectorStore:
                     print(f"✅ [VECTORSTORE] Chunk {idx+1}: Embedding com dimensão correta (1536)")
                 
                 record = {
+=======
+        
+        if not cleaned_chunks:
+            print("Aviso: Nenhum chunk válido para processar")
+            return
+        
+        # Criar embeddings em batch (rápido)
+        texts = [chunk["content"] for chunk in cleaned_chunks]
+        embeddings = self._create_embeddings_batch(texts)
+        
+        # Preparar registros
+        records = []
+        for chunk, embedding in zip(cleaned_chunks, embeddings):
+            # Só incluir se tiver embedding válido
+            if embedding:
+                records.append({
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                     "document_id": chunk["document_id"],
                     "filename": chunk["filename"],
                     "page_number": chunk["page_number"],
                     "chunk_id": chunk["chunk_id"],
                     "content": chunk["content"],  # Já limpo
                     "embedding": embedding
+<<<<<<< HEAD
                 }
                 records.append(record)
                 print(f"✅ [VECTORSTORE] Chunk {idx+1} preparado: doc_id={record['document_id']}, filename={record['filename']}, page={record['page_number']}, chunk_id={record['chunk_id']}, content_len={len(record['content'])}, embedding_dim={len(embedding)}")
@@ -155,16 +189,34 @@ class VectorStore:
         all_embeddings = []
         batch_size = 100
         print(f"🔵 [VECTORSTORE] Configuração: batch_size={batch_size}, model={settings.MODEL_EMBEDDING}")
+=======
+                })
+        
+        # Inserir em batch com delay antes para não sobrecarregar o banco
+        if records:
+            # Pequeno delay antes de inserir para evitar sobrecarga
+            time.sleep(0.5)
+            self._insert_batch(records)
+    
+    def _create_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """Cria embeddings em batch (econômico e rápido)"""
+        all_embeddings = []
+        batch_size = 100
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         
         # Filtrar textos vazios ou inválidos
         valid_texts = []
         text_indices = []  # Mapear índices válidos para índices originais
         
+<<<<<<< HEAD
         print(f"🔵 [VECTORSTORE] Filtrando textos válidos de {len(texts)} textos")
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         for idx, text in enumerate(texts):
             if text and isinstance(text, str) and text.strip():
                 valid_texts.append(text)
                 text_indices.append(idx)
+<<<<<<< HEAD
                 print(f"✅ [VECTORSTORE] Texto {idx+1} válido: {len(text)} chars")
             else:
                 print(f"⚠️ [VECTORSTORE] Texto {idx+1} inválido: type={type(text)}, empty={not text if text else True}")
@@ -181,16 +233,30 @@ class VectorStore:
         print(f"🔵 [VECTORSTORE] Processando {total_batches} batches de embeddings")
         
         for batch_num, i in enumerate(range(0, len(valid_texts), batch_size), 1):
+=======
+        
+        if not valid_texts:
+            # Retornar embeddings vazios se não houver textos válidos
+            return [[] for _ in texts]
+        
+        # Criar embeddings apenas para textos válidos
+        for i in range(0, len(valid_texts), batch_size):
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             batch = valid_texts[i:i + batch_size]
             
             # Validar que batch não está vazio
             if not batch:
+<<<<<<< HEAD
                 print(f"⚠️ [VECTORSTORE] Batch {batch_num} vazio, pulando")
                 continue
             
             print(f"🔵 [VECTORSTORE] Processando batch {batch_num}/{total_batches}: {len(batch)} textos (índices {i} a {i+len(batch)-1})")
             print(f"🔵 [VECTORSTORE] Tamanhos dos textos: {[len(t) for t in batch[:3]]}... (mostrando primeiros 3)")
             
+=======
+                continue
+            
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             # Usar dimensions=1536 para compatibilidade com Supabase (limite de 2000)
             embedding_params = {
                 "model": settings.MODEL_EMBEDDING,
@@ -200,6 +266,7 @@ class VectorStore:
             # Se usar text-embedding-3-large, reduzir para 1536 dimensões
             if "3-large" in settings.MODEL_EMBEDDING:
                 embedding_params["dimensions"] = 1536
+<<<<<<< HEAD
                 print(f"🔵 [VECTORSTORE] Usando dimensions=1536 para model {settings.MODEL_EMBEDDING}")
             
             print(f"🔵 [VECTORSTORE] Chamando OpenAI API para criar embeddings...")
@@ -213,10 +280,17 @@ class VectorStore:
                 else:
                     print(f"⚠️ [VECTORSTORE] Batch {batch_num}: API retornou lista vazia de embeddings")
                 
+=======
+            
+            try:
+                response = self.client.embeddings.create(**embedding_params)
+                batch_embeddings = [item.embedding for item in response.data]
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                 all_embeddings.extend(batch_embeddings)
                 
                 # Pequeno delay entre batches de embeddings para não sobrecarregar a API
                 if i + batch_size < len(valid_texts):
+<<<<<<< HEAD
                     print(f"🔵 [VECTORSTORE] Aguardando 0.2s antes do próximo batch...")
                     time.sleep(0.2)  # 200ms entre batches de embeddings
             except Exception as e:
@@ -244,10 +318,29 @@ class VectorStore:
                 embedding_idx += 1
         
         print(f"✅ [VECTORSTORE] Mapeamento concluído: {mapped_count} embeddings mapeados, {len(result)} slots no resultado final")
+=======
+                    time.sleep(0.2)  # 200ms entre batches de embeddings
+            except Exception as e:
+                # Log do erro e dados do batch para debug
+                print(f"Erro ao criar embeddings para batch: {e}")
+                print(f"Tamanho do batch: {len(batch)}")
+                print(f"Primeiros caracteres do primeiro texto: {batch[0][:100] if batch else 'N/A'}")
+                raise
+        
+        # Mapear embeddings de volta para os índices originais
+        result = [[] for _ in texts]  # Inicializar com listas vazias
+        embedding_idx = 0
+        for valid_idx, original_idx in enumerate(text_indices):
+            if embedding_idx < len(all_embeddings):
+                result[original_idx] = all_embeddings[embedding_idx]
+                embedding_idx += 1
+        
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         return result
     
     def _insert_batch(self, records: List[Dict]):
         """Insere em batch no Supabase com retry e batches menores"""
+<<<<<<< HEAD
         print(f"🔵 [VECTORSTORE] ════════════════════════════════════════════════════════")
         print(f"🔵 [VECTORSTORE] _insert_batch CHAMADO! {len(records)} registros")
         print(f"🔵 [VECTORSTORE] Vou inserir na tabela: {settings.TABLE_EMBEDDINGS}")
@@ -269,12 +362,20 @@ class VectorStore:
                 first_record = batch[0]
                 print(f"🔵 [VECTORSTORE] Primeiro registro do batch: doc_id={first_record.get('document_id')}, filename={first_record.get('filename')}, page={first_record.get('page_number')}, chunk_id={first_record.get('chunk_id')}, content_len={len(first_record.get('content', ''))}, embedding_dim={len(first_record.get('embedding', []))}")
             
+=======
+        batch_size = 3  # Reduzir para 3 registros para evitar timeout e reduzir carga
+        delay_between_batches = 1.0  # Aumentar delay entre batches para 1s
+        
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             max_retries = 3
             retry_delay = 3  # Aumentar delay inicial para 3s para dar mais tempo ao banco
             inserted = False
             
             for attempt in range(max_retries):
                 try:
+<<<<<<< HEAD
                     print(f"🔵 [VECTORSTORE] Tentativa {attempt+1}/{max_retries} de inserir batch {batch_idx}")
                     print(f"🔵 [VECTORSTORE] Inserindo {len(batch)} registros na tabela {settings.TABLE_EMBEDDINGS}...")
                     print(f"🔵 [VECTORSTORE] 🔴 CHAMANDO SUPABASE.INSERT AGORA...")
@@ -292,6 +393,12 @@ class VectorStore:
                     # Pequeno delay após inserção bem-sucedida
                     if i + batch_size < len(records):
                         print(f"🔵 [VECTORSTORE] Aguardando {delay_between_batches}s antes do próximo batch...")
+=======
+                    self.supabase.table(settings.TABLE_EMBEDDINGS).insert(batch).execute()
+                    inserted = True
+                    # Pequeno delay após inserção bem-sucedida
+                    if i + batch_size < len(records):
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         time.sleep(delay_between_batches)
                     break  # Sucesso, sair do loop de retry
                 except APIError as e:
@@ -299,10 +406,15 @@ class VectorStore:
                     
                     # Se for timeout (57014) e ainda houver tentativas
                     if error_code == '57014' and attempt < max_retries - 1:
+<<<<<<< HEAD
                         wait_time = retry_delay * (2 ** attempt)  # Backoff exponencial (3s, 6s, 12s)
                         print(f"⚠️ [VECTORSTORE] Timeout (57014) ao inserir batch {batch_idx} ({len(batch)} registros)")
                         print(f"🔵 [VECTORSTORE] Tentando novamente em {wait_time}s... (tentativa {attempt + 1}/{max_retries})")
                         print(f"🔵 [VECTORSTORE] Erro completo: {e}")
+=======
+                        wait_time = retry_delay * (2 ** attempt)  # Backoff exponencial (2s, 4s, 8s)
+                        print(f"Timeout ao inserir batch ({len(batch)} registros), tentando novamente em {wait_time}s... (tentativa {attempt + 1}/{max_retries})")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         time.sleep(wait_time)
                         
                         # Reduzir batch na primeira tentativa falha
@@ -363,6 +475,7 @@ class VectorStore:
                     time.sleep(retry_delay)
             
             if not inserted:
+<<<<<<< HEAD
                 print(f"❌ [VECTORSTORE] ERRO CRÍTICO: Não foi possível inserir batch {batch_idx} de {len(batch)} registros após {max_retries} tentativas")
                 print(f"❌ [VECTORSTORE] Registros que falharam: {[(r.get('document_id'), r.get('chunk_id')) for r in batch]}")
             else:
@@ -373,6 +486,13 @@ class VectorStore:
                     time.sleep(delay_between_batches)
         
         print(f"✅ [VECTORSTORE] _insert_batch concluído: processados {total_batches} batches")
+=======
+                print(f"Aviso: Não foi possível inserir batch de {len(batch)} registros após {max_retries} tentativas")
+            else:
+                # Delay entre batches para não sobrecarregar o banco
+                if i + batch_size < len(records):
+                    time.sleep(delay_between_batches)
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     
     def search(self, query: str, document_id: str = None, limit: int = 8) -> List[Dict]:
         """Busca rápida com pgvector"""

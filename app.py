@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import streamlit as st
@@ -5,11 +6,23 @@ from pathlib import Path
 import glob
 import os
 import sys
+=======
+import streamlit as st
+from pathlib import Path
+from processor import DocumentProcessor
+from vectorstore import VectorStore
+from analyzer import DocumentAnalyzer
+from storage import ResponseStorage
+from file_manager import FileManager
+import glob
+import os
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 from datetime import datetime
 import pandas as pd
 import json
 import logging
 import warnings
+<<<<<<< HEAD
 from threading import Lock
 
 # Configurar encoding UTF-8 para Windows
@@ -17,6 +30,12 @@ from threading import Lock
 if sys.platform == 'win32':
     os.environ['PYTHONIOENCODING'] = 'utf-8'
     # Não reconfigurar sys.stdout/stderr - pode causar problemas com Streamlit
+=======
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+import threading
+from config import settings
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 
 # Configurar logging para filtrar erros de WebSocket do Tornado
 logging.getLogger("tornado.access").setLevel(logging.ERROR)
@@ -30,10 +49,15 @@ warnings.filterwarnings("ignore", message=".*Task exception was never retrieved.
 
 # #region agent log
 def debug_log(location, message, data, hypothesis_id="A", session_id="debug-session", run_id="run1"):
+<<<<<<< HEAD
     """Debug logging helper - garante que diretório existe"""
     log_path = r'c:\Users\TRIA 2026\Downloads\ProcessIA\.cursor\debug.log'
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
+=======
+    """Debug logging helper"""
+    try:
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         log_entry = {
             "sessionId": session_id,
             "runId": run_id,
@@ -41,14 +65,24 @@ def debug_log(location, message, data, hypothesis_id="A", session_id="debug-sess
             "location": location,
             "message": message,
             "data": data,
+<<<<<<< HEAD
             "timestamp": int(__import__('time').time()*1000)
         }
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+=======
+            "timestamp": datetime.now().isoformat()
+        }
+        log_path = os.path.join(os.path.dirname(__file__), ".cursor", "debug.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     except Exception as e:
         # Fallback: tentar escrever no diretório atual
         try:
             with open("debug.log", "a", encoding="utf-8") as f:
+<<<<<<< HEAD
                 f.write(json.dumps({"error": str(e), "error_type": type(e).__name__, "original": {"location": location, "message": message}}, ensure_ascii=False) + "\n")
         except:
             pass
@@ -88,6 +122,15 @@ from analyzer import DocumentAnalyzer
 from storage import ResponseStorage
 from file_manager import FileManager
 
+=======
+                f.write(json.dumps({"error": str(e), "original": log_entry}, ensure_ascii=False) + "\n")
+        except:
+            pass
+# Teste inicial
+debug_log("app.py:31", "DEBUG LOG INICIALIZADO", {"test": True}, "TEST")
+# #endregion
+
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 # Configuração da página
 st.set_page_config(
     page_title="Análise de Processos Jurídicos",
@@ -104,6 +147,7 @@ st.markdown("---")
 @st.cache_resource
 def init_components():
     try:
+<<<<<<< HEAD
         # #region agent log
         debug_log("app.py:112", "INICIANDO init_components", {}, "C")
         # #endregion
@@ -169,6 +213,24 @@ if components is None:
     # #region agent log
     debug_log("app.py:145", "COMPONENTES NONE - PARANDO", {}, "C,E")
     # #endregion
+=======
+        vectorstore = VectorStore()
+        return {
+            "processor": DocumentProcessor(),
+            "vectorstore": vectorstore,
+            "analyzer": DocumentAnalyzer(vectorstore=vectorstore),
+            "storage": ResponseStorage(),
+            "file_manager": FileManager()
+        }
+    except Exception as e:
+        st.error(f"❌ Erro ao inicializar componentes: {str(e)}")
+        st.warning("⚠️ Verifique se o arquivo .env está configurado corretamente")
+        return None
+
+components = init_components()
+
+if components is None:
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     st.error("⚠️ Não foi possível inicializar a aplicação. Verifique o arquivo .env")
     st.stop()
 
@@ -201,7 +263,17 @@ batch_size = st.sidebar.number_input(
     help="Quantos documentos processar por vez"
 )
 
+<<<<<<< HEAD
 # Processamento sequencial - multithread removido
+=======
+max_workers = st.sidebar.number_input(
+    "🧵 Número de Threads (paralelismo)",
+    min_value=1,
+    max_value=16,
+    value=settings.MAX_WORKERS,
+    help="Quantas threads usar para processamento paralelo. Mais threads = mais rápido, mas consome mais recursos."
+)
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 
 # Botões de controle
 st.sidebar.markdown("---")
@@ -230,6 +302,7 @@ try:
         st.sidebar.metric("✅ Concluídos", status_counts.get("CONCLUIDO", 0))
         st.sidebar.metric("⏳ Processando", status_counts.get("PROCESSANDO", 0))
         st.sidebar.metric("⏸️ Pendentes", status_counts.get("PENDENTE", 0))
+<<<<<<< HEAD
         erro_count = status_counts.get("ERRO", 0)
         st.sidebar.metric("❌ Erros", erro_count)
         st.sidebar.metric("✓ Já Processados", status_counts.get("JA_PROCESSADO", 0))
@@ -244,6 +317,10 @@ try:
                     st.rerun()
                 except Exception as e:
                     st.sidebar.error(f"❌ Erro ao limpar status: {str(e)}")
+=======
+        st.sidebar.metric("❌ Erros", status_counts.get("ERRO", 0))
+        st.sidebar.metric("✓ Já Processados", status_counts.get("JA_PROCESSADO", 0))
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 except:
     pass
 
@@ -258,6 +335,7 @@ def add_log(message, level="INFO"):
 def safe_update_logs(log_display, logs, max_lines=50):
     """Atualiza logs de forma segura, ignorando erros de WebSocket fechado"""
     try:
+<<<<<<< HEAD
         if log_display is not None and logs:
             log_text = "\n".join(logs[-max_lines:])
             if log_text.strip():  # Só atualizar se houver logs
@@ -270,6 +348,11 @@ def safe_update_logs(log_display, logs, max_lines=50):
                     except:
                         # Último fallback: usar markdown
                         log_display.markdown(f"```\n{log_text}\n```")
+=======
+        if log_display is not None:
+            log_text = "\n".join(logs[-max_lines:])
+            log_display.code(log_text, language="text")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     except (Exception, RuntimeError, AttributeError, TypeError):
         # Ignorar erros de WebSocket fechado e outros erros assíncronos
         pass
@@ -335,10 +418,13 @@ with tab1:
         )
         
         if uploaded_file is not None:
+<<<<<<< HEAD
             # #region agent log
             debug_log("app.py:249", "UPLOADED FILE DETECTED", {"filename": uploaded_file.name, "size_bytes": len(uploaded_file.getbuffer())}, "A")
             # #endregion
             
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             # Salvar arquivo temporariamente
             import tempfile
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -348,6 +434,7 @@ with tab1:
             filename = uploaded_file.name
             file_size_mb = len(uploaded_file.getbuffer()) / (1024 * 1024)
             
+<<<<<<< HEAD
             # Salvar tmp_path no session_state para persistir entre reruns
             st.session_state['uploaded_tmp_path'] = tmp_path
             st.session_state['uploaded_filename'] = filename
@@ -368,10 +455,14 @@ with tab1:
             # #region agent log
             debug_log("app.py:270", "USING SESSION STATE", {"tmp_path": tmp_path, "filename": filename, "tmp_path_exists": os.path.exists(tmp_path) if tmp_path else False}, "A")
             # #endregion
+=======
+            st.success(f"✅ Arquivo carregado: **{filename}** ({file_size_mb:.2f} MB)")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
             
             # Verificar se já foi processado
             try:
                 existing = components["file_manager"].get_by_filename(filename)
+<<<<<<< HEAD
                 # #region agent log
                 debug_log("app.py:263", "EXISTING FILE CHECK", {"filename": filename, "existing": existing is not None, "status": existing.get("status") if existing else None}, "A")
                 # #endregion
@@ -384,10 +475,16 @@ with tab1:
                         # #region agent log
                         debug_log("app.py:267", "REPROCESS BUTTON CLICKED", {"filename": filename}, "A")
                         # #endregion
+=======
+                if existing and existing.get("status") == "CONCLUIDO":
+                    st.info(f"ℹ️ **{filename}** já foi processado anteriormente.")
+                    if st.button(f"🔄 Reprocessar {filename}", type="primary"):
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         # Resetar status para processar novamente
                         components["file_manager"].update_status(filename, "PENDENTE", existing_data=existing)
                         safe_rerun()
                 elif existing and existing.get("status") == "PROCESSANDO":
+<<<<<<< HEAD
                     # #region agent log
                     debug_log("app.py:271", "FILE ALREADY PROCESSANDO", {"filename": filename}, "A")
                     # #endregion
@@ -488,16 +585,34 @@ with tab1:
                             safe_rerun()
                         else:
                             add_log(f"✅ Arquivo encontrado: {tmp_path} ({os.path.getsize(tmp_path)} bytes)", "DEBUG")
+=======
+                    st.warning(f"⚠️ **{filename}** está sendo processado. Aguarde a conclusão.")
+                else:
+                    # Registrar no banco se necessário
+                    if not existing:
+                        components["file_manager"].register_file(filename, file_size_mb, tmp_path)
+                    
+                    # Botão para processar
+                    if st.button(f"▶️ Processar {filename}", type="primary", disabled=st.session_state.processing):
+                        st.session_state.processing = True
+                        st.session_state.stop_requested = False
+                        st.session_state.logs = []
+                        
+                        add_log(f"Iniciando processamento de {filename}")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         
                         # Logs em tempo real
                         st.markdown("### 📋 Logs do Processamento")
                         log_display = st.empty()
                         progress_bar = st.progress(0)
                         
+<<<<<<< HEAD
                         add_log(f"Iniciando processamento de {filename}")
                         add_log(f"📁 Arquivo: {tmp_path}")
                         add_log(f"📊 Tamanho: {os.path.getsize(tmp_path) / (1024*1024):.2f} MB")
                         
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         chunks_count = [0]
                         
                         try:
@@ -508,6 +623,7 @@ with tab1:
                             safe_update_logs(log_display, st.session_state.logs)
                             
                             def save_chunks_batch(chunks_batch):
+<<<<<<< HEAD
                                 # Log IMEDIATO quando callback é chamado
                                 add_log(f"{filename}: 🔵 CALLBACK RECEBIDO - {len(chunks_batch)} chunks", "DEBUG")
                                 
@@ -528,10 +644,16 @@ with tab1:
                                     add_log(f"{filename}: ❌ ERRO ao salvar chunks - {str(e)}", "ERROR")
                                     add_log(f"{filename}: Traceback: {error_details[:1000]}", "ERROR")
                                     raise
+=======
+                                chunks_count[0] += len(chunks_batch)
+                                add_log(f"{filename}: {chunks_count[0]} chunks processados")
+                                components["vectorstore"].store_chunks(chunks_batch)
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                             
                             add_log(f"{filename}: Extraindo texto...")
                             safe_update_progress(progress_bar, 0.1)
                             
+<<<<<<< HEAD
                             # #region agent log
                             debug_log("app.py:312", "BEFORE process_incremental call", {"tmp_path": tmp_path, "filename": filename, "tmp_path_exists": os.path.exists(tmp_path) if tmp_path else False}, "A,F")
                             # #endregion
@@ -600,11 +722,32 @@ with tab1:
                                 """
                                 add_log(f"{filename}: Iniciando análise RAG...")
                                 try:
+=======
+                            doc = components["processor"].process_incremental(
+                                tmp_path,
+                                filename=filename,
+                                chunk_callback=save_chunks_batch,
+                                batch_size=50
+                            )
+                            
+                            total_pages = doc.get('metadata', {}).get('total_pages', 0)
+                            add_log(f"{filename}: {total_pages} páginas, {chunks_count[0]} chunks")
+                            
+                            # Análise automática
+                            if chunks_count[0] > 0:
+                                add_log(f"{filename}: Iniciando análise RAG...")
+                                safe_update_progress(progress_bar, 0.7)
+                                
+                                try:
+                                    add_log(f"{filename}: Chamando GPT-4.1 para análise...")
+                                    
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                     analise_result, resposta_bruta = components["analyzer"].analyze_full_document_rag(
                                         doc["document_id"],
                                         filename,
                                         return_raw_response=True
                                     )
+<<<<<<< HEAD
                                     components["storage"].save_analysis(**analise_result)
                                     add_log(f"{filename}: Análise salva com sucesso")
                                 except Exception as e:
@@ -612,6 +755,63 @@ with tab1:
                                 """
                             else:
                                 add_log(f"{filename}: ⚠️ Nenhum chunk criado", "WARNING")
+=======
+                                    
+                                    add_log(f"{filename}: Análise GPT-4.1 concluída. Resposta: {len(resposta_bruta)} chars")
+                                    
+                                    # Mostrar resposta da IA
+                                    safe_streamlit_call(st.markdown, f"#### 🤖 Resposta da IA - {filename}")
+                                    try:
+                                        with st.expander("📄 Ver resposta completa", expanded=False):
+                                            safe_streamlit_call(st.markdown, resposta_bruta)
+                                    except Exception:
+                                        pass
+                                    
+                                    safe_update_progress(progress_bar, 0.9)
+                                    add_log(f"{filename}: Salvando no banco...")
+                                    
+                                    # Salvar análise
+                                    try:
+                                        components["storage"].save_analysis(**analise_result)
+                                        add_log(f"{filename}: Análise salva com sucesso")
+                                        
+                                        # Deletar chunks após análise salva com sucesso
+                                        document_id = doc.get("document_id")
+                                        if document_id:
+                                            deleted_count = components["vectorstore"].delete_chunks_by_document_id(document_id)
+                                            add_log(f"{filename}: {deleted_count} chunks deletados após análise")
+                                    except Exception as save_error:
+                                        add_log(f"{filename}: ERRO ao salvar - {str(save_error)}", "ERROR")
+                                        raise
+                                    
+                                    # Atualizar status para CONCLUIDO
+                                    components["file_manager"].update_status(
+                                        filename,
+                                        "CONCLUIDO",
+                                        document_id=doc["document_id"],
+                                        total_chunks=chunks_count[0],
+                                        total_pages=total_pages
+                                    )
+                                    add_log(f"{filename}: Status CONCLUIDO atualizado")
+                                    
+                                    safe_update_progress(progress_bar, 1.0)
+                                    add_log(f"✅ {filename} concluído!")
+                                    
+                                    safe_streamlit_call(st.success, f"✅ **{filename}** concluído! ({chunks_count[0]} chunks)")
+                                    safe_streamlit_call(st.balloons)
+                                    
+                                except Exception as e:
+                                    error_msg = str(e)
+                                    add_log(f"{filename}: ERRO na análise - {error_msg}", "ERROR")
+                                    components["file_manager"].update_status(
+                                        filename,
+                                        "ERRO",
+                                        error_message=f"Erro análise: {error_msg[:200]}"
+                                    )
+                                    safe_streamlit_call(st.error, f"❌ **{filename}**: {error_msg}")
+                            else:
+                                add_log(f"{filename}: Nenhum chunk criado", "WARNING")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                 components["file_manager"].update_status(
                                     filename,
                                     "ERRO",
@@ -632,6 +832,7 @@ with tab1:
                             st.session_state.processing = False
                             safe_update_logs(log_display, st.session_state.logs)
                             
+<<<<<<< HEAD
                             # Limpar arquivo temporário e session_state
                             try:
                                 if tmp_path and os.path.exists(tmp_path):
@@ -647,6 +848,14 @@ with tab1:
                             if 'uploaded_file_size_mb' in st.session_state:
                                 del st.session_state['uploaded_file_size_mb']
                             
+=======
+                            # Limpar arquivo temporário
+                            try:
+                                os.unlink(tmp_path)
+                            except:
+                                pass
+                            
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                             safe_rerun()
             except Exception as e:
                 st.error(f"❌ Erro ao verificar status: {str(e)}")
@@ -782,9 +991,12 @@ with tab1:
                     log_display = st.empty()
                     progress_bar = st.progress(0)
                     
+<<<<<<< HEAD
                     # Atualizar logs inicialmente
                     safe_update_logs(log_display, st.session_state.logs)
                     
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                     # Filtrar documentos pendentes (ordenados por tamanho) usando status ATUALIZADO
                     docs_to_process = []
                     for pdf_file in pdf_files:  # Já ordenados por tamanho
@@ -801,16 +1013,26 @@ with tab1:
                     add_log(f"Documentos pendentes selecionados: {len(docs_to_process)} (ordenados do menor para o maior)")
                     total_docs = len(docs_to_process)
                     
+<<<<<<< HEAD
                     # Atualizar logs após seleção
                     safe_update_logs(log_display, st.session_state.logs)
                     
+=======
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                     if total_docs == 0:
                         st.info("ℹ️ Nenhum documento pendente para processar!")
                         st.session_state.processing = False
                     else:
+<<<<<<< HEAD
                         # Processar documentos sequencialmente
                         add_log(f"Iniciando processamento sequencial de {total_docs} documentos")
                         safe_update_logs(log_display, st.session_state.logs)
+=======
+                        # Processar documentos em paralelo usando multithreading
+                        # Usar o valor selecionado pelo usuário, mas não mais que o total de documentos
+                        num_threads = min(max_workers, total_docs)
+                        add_log(f"Iniciando processamento paralelo com {num_threads} threads (configurado: {max_workers}, documentos: {total_docs})")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         
                         # Criar função para processar um documento
                         def process_single_document(pdf_file, idx, total_docs):
@@ -824,7 +1046,12 @@ with tab1:
                                 except:
                                     pass
                                 
+<<<<<<< HEAD
                                 add_log(f"[{idx+1}/{total_docs}] Iniciando: {filename}")
+=======
+                                with log_lock:
+                                    add_log(f"[{idx+1}/{total_docs}] Iniciando: {filename}")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                 
                                 # Verificar se já tem chunks/embeddings salvos
                                 existing_file_data = components["file_manager"].get_by_filename(filename)
@@ -837,7 +1064,12 @@ with tab1:
                                     
                                     # Verificar se chunks realmente existem no banco
                                     if components["vectorstore"].has_chunks(document_id=document_id_existing):
+<<<<<<< HEAD
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Chunks já existem no banco, reutilizando...")
+=======
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Chunks já existem no banco, reutilizando...")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                         chunks_count[0] = existing_file_data.get("total_chunks", 0)
                                         total_pages = existing_file_data.get("total_pages", 0)
                                         
@@ -849,16 +1081,26 @@ with tab1:
                                                 "total_pages": total_pages
                                             }
                                         }
+<<<<<<< HEAD
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Reutilizando {chunks_count[0]} chunks existentes")
                                     else:
                                         # Document_id salvo mas chunks não existem mais, reprocessar
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Document ID encontrado mas chunks não existem, reprocessando...")
+=======
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Reutilizando {chunks_count[0]} chunks existentes")
+                                    else:
+                                        # Document_id salvo mas chunks não existem mais, reprocessar
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Document ID encontrado mas chunks não existem, reprocessando...")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                         doc = None
                                 
                                 # Se não tem chunks, processar PDF
                                 if doc is None:
                                     chunks_count = [0]
                                     
+<<<<<<< HEAD
                                     def save_chunks_batch(chunks_batch, document_id, filename_cb):
                                         # Log IMEDIATO quando callback é chamado
                                         add_log(f"[{idx+1}/{total_docs}] {filename_cb}: 🔵 CALLBACK RECEBIDO - {len(chunks_batch)} chunks", "DEBUG")
@@ -882,11 +1124,22 @@ with tab1:
                                             raise
                                     
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: Extraindo texto...")
+=======
+                                    def save_chunks_batch(chunks_batch):
+                                        chunks_count[0] += len(chunks_batch)
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: {chunks_count[0]} chunks processados")
+                                        components["vectorstore"].store_chunks(chunks_batch)
+                                    
+                                    with log_lock:
+                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Extraindo texto...")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                     
                                     doc = components["processor"].process_incremental(
                                         pdf_file,
                                         filename=filename,
                                         chunk_callback=save_chunks_batch,
+<<<<<<< HEAD
                                         batch_size=5  # Reduzido para salvar chunks imediatamente após extração
                                     )
                                     
@@ -933,11 +1186,30 @@ with tab1:
                                     """
                                     add_log(f"[{idx+1}/{total_docs}] {filename}: Iniciando análise RAG...")
                                     try:
+=======
+                                        batch_size=50
+                                    )
+                                    
+                                    total_pages = doc.get('metadata', {}).get('total_pages', 0)
+                                    with log_lock:
+                                        add_log(f"[{idx+1}/{total_docs}] {filename}: {total_pages} páginas, {chunks_count[0]} chunks")
+                                
+                                # Continuar com análise se tiver chunks
+                                if chunks_count[0] > 0:
+                                    with log_lock:
+                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Iniciando análise RAG...")
+                                    
+                                    try:
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Chamando GPT-4.1 para análise...")
+                                        
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                         analise_result, resposta_bruta = components["analyzer"].analyze_full_document_rag(
                                             doc["document_id"],
                                             filename,
                                             return_raw_response=True
                                         )
+<<<<<<< HEAD
                                         components["storage"].save_analysis(**analise_result)
                                         add_log(f"[{idx+1}/{total_docs}] {filename}: Análise salva com sucesso")
                                     except Exception as e:
@@ -951,6 +1223,98 @@ with tab1:
                             
                             except Exception as proc_error:
                                 add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO no processamento - {str(proc_error)}", "ERROR")
+=======
+                                        
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Análise GPT-4.1 concluída. Resposta: {len(resposta_bruta)} chars")
+                                        
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Salvando no banco...")
+                                        
+                                        # Salvar análise
+                                        components["storage"].save_analysis(**analise_result)
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Análise salva com sucesso")
+                                        
+                                        # Deletar chunks após análise salva com sucesso
+                                        document_id = doc.get("document_id")
+                                        if document_id:
+                                            deleted_count = components["vectorstore"].delete_chunks_by_document_id(document_id)
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: {deleted_count} chunks deletados após análise")
+                                        
+                                        # Contar campos extraídos
+                                        campos_extraidos = len([k for k in analise_result.keys() if k.startswith('p')])
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: {campos_extraidos} campos extraídos")
+                                        
+                                        # Mostrar número do processo
+                                        if analise_result.get('numero_processo'):
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Processo {analise_result.get('numero_processo')}")
+                                        else:
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: ATENÇÃO - Processo não identificado!", "WARNING")
+                                        
+                                        # Atualizar status para CONCLUIDO
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: Atualizando status...")
+                                        
+                                        try:
+                                            status_result = components["file_manager"].update_status(
+                                                filename,
+                                                "CONCLUIDO",
+                                                document_id=doc["document_id"],
+                                                total_chunks=chunks_count[0],
+                                                total_pages=total_pages
+                                            )
+                                            if status_result:
+                                                with log_lock:
+                                                    add_log(f"[{idx+1}/{total_docs}] {filename}: Status CONCLUIDO atualizado")
+                                            else:
+                                                with log_lock:
+                                                    add_log(f"[{idx+1}/{total_docs}] {filename}: AVISO - update_status retornou None", "WARNING")
+                                        except Exception as status_error:
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO status - {str(status_error)}", "ERROR")
+                                        
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] ✅ {filename} concluído!")
+                                        
+                                        return {"success": True, "filename": filename, "idx": idx}
+                                    
+                                    except Exception as e:
+                                        import traceback
+                                        error_msg = str(e)
+                                        tb_str = traceback.format_exc()
+                                        with log_lock:
+                                            add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO DETALHADO:", "ERROR")
+                                            add_log(f"Mensagem: {error_msg}", "ERROR")
+                                            add_log(f"Traceback: {tb_str[:500]}", "ERROR")
+                                        
+                                        try:
+                                            components["file_manager"].update_status(
+                                                filename,
+                                                "ERRO",
+                                                error_message=f"Erro análise: {error_msg[:200]}"
+                                            )
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Status ERRO atualizado", "INFO")
+                                        except Exception as status_error:
+                                            with log_lock:
+                                                add_log(f"[{idx+1}/{total_docs}] {filename}: Erro ao atualizar status ERRO: {str(status_error)}", "ERROR")
+                                        
+                                        return {"success": False, "filename": filename, "idx": idx, "error": error_msg}
+                                
+                                else:
+                                    with log_lock:
+                                        add_log(f"[{idx+1}/{total_docs}] {filename}: Nenhum chunk encontrado, pulando análise")
+                                    return {"success": False, "filename": filename, "idx": idx, "error": "Nenhum chunk"}
+                            
+                            except Exception as proc_error:
+                                with log_lock:
+                                    add_log(f"[{idx+1}/{total_docs}] {filename}: ERRO no processamento - {str(proc_error)}", "ERROR")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                                 try:
                                     components["file_manager"].update_status(
                                         filename,
@@ -961,6 +1325,7 @@ with tab1:
                                     pass
                                 return {"success": False, "filename": filename, "idx": idx, "error": str(proc_error)}
                         
+<<<<<<< HEAD
                         # Processar documentos sequencialmente
                         completed_count = 0
                         add_log(f"🔄 Processando {total_docs} documentos sequencialmente...")
@@ -1021,6 +1386,34 @@ with tab1:
                                     pass
                         
                         add_log(f"✅ Processamento concluído: {completed_count}/{total_docs} documentos processados")
+=======
+                        # Processar documentos em paralelo
+                        completed_count = [0]
+                        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                            # Submeter todas as tarefas
+                            future_to_doc = {
+                                executor.submit(process_single_document, pdf_file, idx, total_docs): (pdf_file, idx)
+                                for idx, pdf_file in enumerate(docs_to_process)
+                            }
+                            
+                            # Processar resultados conforme completam
+                            for future in as_completed(future_to_doc):
+                                if st.session_state.stop_requested:
+                                    break
+                                
+                                result = future.result()
+                                completed_count[0] += 1
+                                
+                                # Atualizar progresso
+                                with progress_lock:
+                                    try:
+                                        safe_update_progress(progress_bar, completed_count[0] / total_docs)
+                                        safe_update_logs(log_display, st.session_state.logs)
+                                    except:
+                                        pass
+                        
+                        add_log(f"✅ Processamento concluído: {completed_count[0]}/{total_docs} documentos processados")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
                         
                         # Finalizar processamento
                         st.session_state.processing = False
@@ -1050,12 +1443,16 @@ with tab1:
         st.markdown("---")
         st.markdown("### 📋 Logs Recentes")
         log_text = "\n".join(st.session_state.logs[-100:])
+<<<<<<< HEAD
         if log_text.strip():
             st.code(log_text, language="text", line_numbers=False)
         else:
             st.info("ℹ️ Logs vazios")
     elif st.session_state.processing:
         st.info("⏳ Processamento em andamento... Os logs aparecerão aqui em breve.")
+=======
+        st.code(log_text, language="text")
+>>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
 
 # Aba 2: Visualizar Documentos Analisados
 with tab2:
