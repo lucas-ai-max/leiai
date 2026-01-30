@@ -36,27 +36,9 @@ class ResponseStorage:
             analisado_por: Nome de quem analisou
             **kwargs: Campos de perguntas (p1_1_resposta, p1_1_justificativa, etc.)
         """
-<<<<<<< HEAD
-        print(f"🟣 [STORAGE] save_analysis: Iniciando salvamento")
-        print(f"🟣 [STORAGE] numero_processo: {numero_processo}")
-        print(f"🟣 [STORAGE] arquivo_original: {arquivo_original}")
-        print(f"🟣 [STORAGE] Campos extras recebidos: {len(kwargs)} campos")
-        
-        # Verificar se já existe análise para este processo E arquivo
-        print(f"🟣 [STORAGE] Verificando se análise já existe...")
-        existing = self.get_by_numero_processo_and_file(numero_processo, arquivo_original)
-        
-        if existing:
-            print(f"🟣 [STORAGE] Análise existente encontrada (ID: {existing.get('id', 'N/A')}), atualizando...")
-        else:
-            print(f"🟣 [STORAGE] Nenhuma análise existente, criando nova...")
-        
-=======
         
         # Verificar se já existe análise para este processo E arquivo
         existing = self.get_by_numero_processo_and_file(numero_processo, arquivo_original)
-        
->>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
         record = {
             "numero_processo": numero_processo,
             "arquivo_original": arquivo_original,
@@ -71,53 +53,6 @@ class ResponseStorage:
         }
         
         # Remover None values
-<<<<<<< HEAD
-        record_before = len(record)
-        record = {k: v for k, v in record.items() if v is not None}
-        record_after = len(record)
-        
-        if record_before != record_after:
-            print(f"🟣 [STORAGE] Campos None removidos: {record_before} -> {record_after} campos")
-        
-        print(f"🟣 [STORAGE] Registro preparado com {len(record)} campos")
-        
-        try:
-            if existing:
-                # Atualizar registro existente (mesmo processo e arquivo)
-                print(f"🟣 [STORAGE] Executando UPDATE na tabela {settings.TABLE_RESPOSTAS}...")
-                result = self.supabase.table(settings.TABLE_RESPOSTAS)\
-                    .update(record)\
-                    .eq("numero_processo", numero_processo)\
-                    .eq("arquivo_original", arquivo_original)\
-                    .execute()
-                
-                if result.data:
-                    print(f"✅ [STORAGE] Análise atualizada com sucesso: {len(result.data)} registro(s) atualizado(s)")
-                    return result.data[0]
-                else:
-                    print(f"⚠️ [STORAGE] UPDATE executado mas nenhum registro retornado")
-                    return None
-            else:
-                # Criar novo registro
-                record["status_analise"] = "CONCLUIDO"
-                print(f"🟣 [STORAGE] Executando INSERT na tabela {settings.TABLE_RESPOSTAS}...")
-                result = self.supabase.table(settings.TABLE_RESPOSTAS)\
-                    .insert(record)\
-                    .execute()
-                
-                if result.data:
-                    print(f"✅ [STORAGE] Análise inserida com sucesso: {len(result.data)} registro(s) inserido(s), ID={result.data[0].get('id', 'N/A')}")
-                    return result.data[0]
-                else:
-                    print(f"⚠️ [STORAGE] INSERT executado mas nenhum registro retornado")
-                    return None
-        except Exception as e:
-            print(f"❌ [STORAGE] ERRO ao salvar análise: {str(e)}")
-            print(f"❌ [STORAGE] Tipo do erro: {type(e).__name__}")
-            import traceback
-            print(f"❌ [STORAGE] Traceback: {traceback.format_exc()}")
-            raise
-=======
         record = {k: v for k, v in record.items() if v is not None}
         
         if existing:
@@ -135,7 +70,6 @@ class ResponseStorage:
                 .insert(record)\
                 .execute()
             return result.data[0] if result.data else None
->>>>>>> b5e15dc0d9832b696102fc7e6f8c4b6f2b1f24cf
     
     def save_question_answer(self,
                             numero_processo: str,

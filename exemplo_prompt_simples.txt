@@ -1,0 +1,10 @@
+Analise o documento e extraia estas informações em JSON:
+
+{
+  "numero_processo": "Número do processo",
+  "partes": "Nome das partes",
+  "resultado": "Resultado da decisão",
+  "resumo": "Resumo breve"
+}
+
+Retorne APENAS o JSON válido, sem texto adicional.

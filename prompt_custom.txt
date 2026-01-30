@@ -1,0 +1,19 @@
+Analise o documento jurídico fornecido e extraia as seguintes informações em formato JSON:
+
+{
+  "numero_processo": "Número do processo (se encontrado)",
+  "tipo_documento": "Tipo do documento (sentença, acórdão, despacho, etc.)",
+  "partes": "Nome das partes envolvidas",
+  "juiz": "Nome do juiz/relator",
+  "data_decisao": "Data da decisão",
+  "resultado": "Procedente, improcedente ou parcialmente procedente",
+  "valor_causa": "Valor da causa (se mencionado)",
+  "resumo": "Resumo breve da decisão",
+  "observacoes": "Observações relevantes"
+}
+
+INSTRUÇÕES:
+- Retorne APENAS o JSON válido, sem texto adicional
+- Use "N/A" para campos não encontrados
+- Seja preciso e objetivo
+- Mantenha formatação consistente
