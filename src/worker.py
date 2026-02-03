@@ -16,7 +16,8 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from supabase import create_client
 from config import settings
-from gemini_client import GeminiClient
+# from gemini_client import GeminiClient
+from openai_client import OpenAIClient
 
 # Variáveis globais (inicializadas no main_loop)
 supabase = None
@@ -201,6 +202,36 @@ def save_to_csv(data: dict):
     
     print(f"   💾 Salvo em: {CSV_OUTPUT} ({len(all_headers)} colunas)")
 
+def apply_regex_fix(raw_text: str, data: dict):
+    """
+    Aplica correção via Regex para campos de Cobertura quando o texto está "quebrado" (colunar).
+    Padrão: SEGURADO: ... TERCEIROS: ... SIM ... SIM
+    """
+    try:
+        if not raw_text: return data
+        
+        # Regex busca: SEGURADO: (texto qualquer) TERCEIROS: (texto qualquer) (SIM/NÃO) (texto qualquer) (SIM/NÃO)
+        # O re.DOTALL faz o . casar com quebras de linha
+        # Adicionei \s* para flexibilidade extra
+        pattern = r'SEGURADO:.*?TERCEIROS:.*?(\bSIM\b|\bNÃO\b).*?(\bSIM\b|\bNÃO\b)'
+        match = re.search(pattern, raw_text, re.DOTALL | re.IGNORECASE)
+        
+        if match:
+            segurado_val = match.group(1).upper()
+            terceiros_val = match.group(2).upper()
+            
+            print(f"   🔨 REGEX FIX: Substituindo Cobertura pela leitura direta do texto.")
+            print(f"      Segurado: {segurado_val} | Terceiros: {terceiros_val}")
+            
+            if 'analise_cobertura' not in data: data['analise_cobertura'] = {}
+            if isinstance(data['analise_cobertura'], dict):
+                data['analise_cobertura']['segurado'] = segurado_val
+                data['analise_cobertura']['terceiros'] = terceiros_val
+    except Exception as e:
+        print(f"⚠️ Erro no Regex Fix: {e}")
+    
+    return data
+
 def process_file_task(record):
     """Tarefa individual de processamento"""
     filename = record['filename']
@@ -236,8 +267,11 @@ def process_file_task(record):
             print(f"   🤖 Enviando para IA...")
             prompt_final = f"{current_prompt}\n\nIMPORTANTE: Retorne APENAS o JSON válido, usando EXATAMENTE as chaves definidas no schema acima. Não adicione nem remova chaves."
             
-            json_text = ai_client.analyze_document(tmp_path, prompt_final)
+            json_text, raw_text = ai_client.analyze_document(tmp_path, prompt_final)
             data_analise = json.loads(json_text)
+
+            # Aplicar Correção Híbrida (Regex sobrepõe AI para campos críticos)
+            data_analise = apply_regex_fix(raw_text, data_analise)
             
             # Validação se IA retornou Lista ao invés de Objeto
             if isinstance(data_analise, list):
@@ -269,8 +303,8 @@ def process_file_task(record):
             data_analise['arquivo_original'] = filename
             data_analise['data_processamento'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
-            # 4. Salvar em CSV local
-            save_to_csv(data_analise)
+            # 4. Salvar em CSV local (DESATIVADO PARA ALTA PERFORMANCE)
+            # save_to_csv(data_analise)
             
             # 5. Salvar também no Supabase para exportação via frontend (com projeto_id)
             try:
@@ -335,7 +369,14 @@ def main_loop():
     global supabase, ai_client, semaphore
     
     supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-    ai_client = GeminiClient()
+    
+    # ai_client = GeminiClient()
+    try:
+        ai_client = OpenAIClient()
+    except Exception as e:
+        print(f"❌ Erro ao iniciar OpenAI: {e}")
+        return
+
     semaphore = threading.Semaphore(settings.MAX_WORKERS)
     
     # Verificar se há prompt configurado (qualquer projeto ou legado)
@@ -350,7 +391,7 @@ def main_loop():
     print(f"   - Threads: {settings.MAX_WORKERS}")
     print(f"   - Arquivo de saída: {CSV_OUTPUT}")
     print(f"   - Prompt: Carregado do Supabase (atualizado dinamicamente)")
-    print(f"   - Modelo: {settings.MODEL_FAST}")
+    print(f"   - Modelo: {ai_client.model_name}")
     print()
     
     executor = ThreadPoolExecutor(max_workers=settings.MAX_WORKERS)
