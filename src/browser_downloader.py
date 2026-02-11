@@ -7,7 +7,9 @@ import tempfile
 import os
 import time
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from config import settings
+import requests
 
 class BrowserDownloader:
     """
@@ -15,6 +17,12 @@ class BrowserDownloader:
     Specifically designed for Salesforce download pages that use JavaScript redirects.
     """
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((requests.exceptions.ConnectionError, Exception)),
+        reraise=True
+    )
     def download_file(self, url: str, timeout_ms: int = 60000) -> bytes:
         """
         Downloads a file using a headless browser.
@@ -109,7 +117,7 @@ class BrowserDownloader:
                     try:
                         count = page.locator(selector).count()
                         if count > 0:
-                            print(f"   ✅ Elemento encontrado: {selector} ({count} elementos)")
+                            print(f"   [OK] Elemento encontrado: {selector} ({count} elementos)")
                             # Click the first one
                             page.locator(selector).first.click(timeout=5000)
                             button_clicked = True
@@ -129,11 +137,19 @@ class BrowserDownloader:
                 # Check if we got a download from network monitoring
                 if download_url_from_network and not download_promise:
                     print(f"   🌐 URL de download capturada via rede: {download_url_from_network[:50]}...")
-                    # Try to download directly
-                    import requests
-                    resp = requests.get(download_url_from_network, timeout=60)
-                    resp.raise_for_status()
-                    return resp.content
+                    # Try to download directly with retry
+                    @retry(
+                        stop=stop_after_attempt(3),
+                        wait=wait_exponential(multiplier=2, min=4, max=30),
+                        reraise=True
+                    )
+                    def download_with_retry(url):
+                        print(f"   ⬇️ Tentando download...")
+                        resp = requests.get(url, timeout=300)  # Increased from 60s to 5min
+                        resp.raise_for_status()
+                        return resp.content
+                    
+                    return download_with_retry(download_url_from_network)
                 
                 # Wait for download to complete
                 if download_promise:
@@ -154,14 +170,14 @@ class BrowserDownloader:
                         if file_bytes[:2] != b'PK':
                             # Not a ZIP, might be HTML
                             preview = file_bytes[:500].decode('utf-8', errors='ignore')
-                            print(f"   ⚠️ Arquivo baixado não é ZIP. Primeiros bytes: {preview[:100]}")
+                            print(f"   [AVISO] Arquivo baixado nao e ZIP. Primeiros bytes: {preview[:100]}")
                             raise Exception(f"Arquivo baixado não é ZIP válido. Pode ser HTML ou erro da Salesforce.")
                     
                     # Cleanup
                     os.remove(file_path)
                     os.rmdir(temp_dir)
                     
-                    print(f"   ✅ Download concluído: {len(file_bytes)} bytes")
+                    print(f"   [OK] Download concluido: {len(file_bytes)} bytes")
                     return file_bytes
                 else:
                     # No download detected - save page screenshot for debugging

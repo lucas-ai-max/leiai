@@ -23,7 +23,7 @@ def process_case_task(case_record):
     
     with semaphore:
         try:
-            print(f"▶️ Iniciando Caso: {case_number}")
+            print(f"Iniciando Caso: {case_number}")
             
             # CRITICAL: Mark as PROCESSANDO immediately to prevent duplicate processing
             update_result = supabase.table(settings.TABLE_CASOS).update(
@@ -32,60 +32,129 @@ def process_case_task(case_record):
             
             # If no rows updated, another thread already grabbed this case
             if not update_result.data or len(update_result.data) == 0:
-                print(f"   ⏭️ Caso {case_number} já está sendo processado por outra thread, pulando.")
+                print(f"   Caso {case_number} ja esta sendo processado por outra thread, pulando.")
                 return
             
-            # 1. Fetch ZIP URL
-            print(f"   🔎 Buscando caso {case_number} na API...")
-            zip_url = sf_client.get_case_zip_url(case_number)
+            # 1. Fetch ALL ZIP URLs
+            print(f"   Buscando caso {case_number} na API...")
+            zip_urls = sf_client.get_case_zip_urls(case_number)
             
-            if not zip_url:
-                print(f"   ⚠️ Aviso: Nenhum ZIP encontrado para caso {case_number}.")
-                supabase.table(settings.TABLE_CASOS).update(
-                    {"status": "CONCLUIDO", "error_message": "⚠️ Nenhum arquivo ZIP disponível", "updated_at": "now()"}
-                ).eq("id", case_id).execute()
+            if not zip_urls:
+                print(f"   [AVISO] Nenhum ZIP encontrado para caso {case_number}.")
+                supabase.table(settings.TABLE_CASOS).update({
+                    "status": "CONCLUIDO",
+                    "error_message": "Nenhum arquivo ZIP disponivel",
+                    "updated_at": "now()"
+                }).eq("id", case_id).execute()
                 return
             
-            print(f"   ✅ ZIP encontrado: {zip_url[:50]}...")
-            
-            # Update DB
-            print(f"   💾 Atualizando banco de dados...")
-            supabase.table(settings.TABLE_CASOS).update(
-                {"zip_url": zip_url, "status": "PROCESSA_ZIP"}
-            ).eq("id", case_id).execute()
-            print(f"   ✅ Status atualizado: PROCESSA_ZIP")
-            
-            # 2. Process ZIP
-            print(f"   📦 Iniciando processamento do ZIP...")
+            print(f"   [OK] {len(zip_urls)} ZIP(s) encontrado(s)")
             
             # Use dedicated Salesforce project ID if none provided
             projeto_id = case_record.get('projeto_id') or settings.SALESFORCE_PROJECT_ID
             
-            result = zip_processor.process_zip_url(
-                case_number, 
-                zip_url, 
-                case_id, 
-                projeto_id=projeto_id
-            )
+            # 2. Process each ZIP
+            total_processed = 0
+            total_failed = 0
+            total_skipped = 0
+            errors = []
             
-            if result['success']:
-                print(f"   ✅ ZIP processado com sucesso!")
-                print(f"   💾 Marcando caso como CONCLUÍDO...")
-                supabase.table(settings.TABLE_CASOS).update(
-                    {"status": "CONCLUIDO", "updated_at": "now()", "error_message": None}
-                ).eq("id", case_id).execute()
-                print(f"✅ Caso {case_number} processado com sucesso!")
+            for idx, zip_url in enumerate(zip_urls, 1):
+                try:
+                    print(f"\n   === Processando ZIP {idx}/{len(zip_urls)} ===")
+                    print(f"   URL: {zip_url[:50]}...")
+                    
+                    # Update DB status
+                    supabase.table(settings.TABLE_CASOS).update({
+                        "zip_url": zip_url,
+                        "status": "PROCESSA_ZIP"
+                    }).eq("id", case_id).execute()
+                    
+                    result = zip_processor.process_zip_url(
+                        case_number,
+                        zip_url,
+                        case_id,
+                        projeto_id=projeto_id
+                    )
+                    
+                    if result['success']:
+                        print(f"   [OK] ZIP {idx} processado com sucesso!")
+                        total_processed += 1
+                    else:
+                        error_msg = result.get('error', 'Erro desconhecido')
+                        
+                        # Distinguish between real errors and "no files found" warnings
+                        if "Nenhum arquivo" in error_msg and ("ANALISE" in error_msg or "PDF ou Excel" in error_msg):
+                            print(f"   [AVISO] ZIP {idx}: {error_msg}")
+                            total_skipped += 1
+                        else:
+                            print(f"   [ERRO] ZIP {idx} falhou: {error_msg}")
+                            total_failed += 1
+                            errors.append(f"ZIP {idx}: {error_msg}")
+                        
+                except Exception as zip_error:
+                    print(f"[ERRO] Erro processando ZIP {idx}: {zip_error}")
+                    total_failed += 1
+                    errors.append(f"ZIP {idx}: {str(zip_error)}")
+            
+            # 3. Update final status
+            if total_failed == 0:
+                if total_skipped > 0:
+                    print(f"\n[OK] Caso {case_number}: {total_processed} ZIP(s) processado(s), {total_skipped} ZIP(s) sem arquivos relevantes")
+                else:
+                    print(f"\n[OK] Caso {case_number}: {total_processed} ZIP(s) processado(s) com sucesso!")
+                supabase.table(settings.TABLE_CASOS).update({
+                    "status": "CONCLUIDO",
+                    "updated_at": "now()",
+                    "error_message": None
+                }).eq("id", case_id).execute()
             else:
-                raise ValueError(result['error'])
+                error_summary = f"{total_processed} sucesso, {total_failed} erro(s)"
+                if errors:
+                    error_summary += ": " + "; ".join(errors[:2])
+                print(f"\n[AVISO] Caso {case_number}: {error_summary}")
+                supabase.table(settings.TABLE_CASOS).update({
+                    "status": "CONCLUIDO" if total_processed > 0 else "ERRO",
+                    "updated_at": "now()",
+                    "error_message": error_summary[:500]
+                }).eq("id", case_id).execute()
 
         except Exception as e:
             error_msg = str(e)[:1000]
-            print(f"❌ Erro Caso {case_number}: {error_msg}")
-            print(f"   💾 Marcando caso como ERRO no banco...")
-            supabase.table(settings.TABLE_CASOS).update(
-                {"status": "ERRO", "error_message": error_msg, "updated_at": "now()"}
-            ).eq("id", case_id).execute()
-            print(f"   ✅ Status de erro registrado.")
+            print(f"[ERRO] Caso {case_number}: {error_msg}")
+            
+            # Check if it's a server disconnection error
+            is_server_disconnect = "Server disconnected" in error_msg or "RemoteProtocolError" in error_msg
+            
+            # Fetch current case from DB to get retry_count
+            try:
+                current_case = supabase.table(settings.TABLE_CASOS).select("retry_count").eq("id", case_id).single().execute()
+                current_retry_count = current_case.data.get('retry_count', 0) if current_case.data else 0
+            except:
+                current_retry_count = 0
+            
+            if is_server_disconnect and current_retry_count < 3:
+                # Re-queue for retry
+                new_retry_count = current_retry_count + 1
+                print(f"   🔄 Erro de conexão detectado. Recolocando na fila (tentativa {new_retry_count}/3)...")
+                supabase.table(settings.TABLE_CASOS).update({
+                    "status": "PENDENTE",
+                    "retry_count": new_retry_count,
+                    "updated_at": "now()",
+                    "error_message": f"Retry {new_retry_count}/3: {error_msg[:300]}"
+                }).eq("id", case_id).execute()
+                print(f"   [OK] Caso recolocado na fila para nova tentativa.")
+            else:
+                # Final error - exceeded retries or different error type
+                if is_server_disconnect:
+                    error_msg = f"Falhou após 3 tentativas: {error_msg}"
+                print(f"   Marcando caso como ERRO no banco...")
+                supabase.table(settings.TABLE_CASOS).update({
+                    "status": "ERRO",
+                    "error_message": error_msg,
+                    "updated_at": "now()"
+                }).eq("id", case_id).execute()
+                print(f"   [OK] Status de erro registrado.")
 
 def main_loop():
     global supabase, sf_client, zip_processor, semaphore
@@ -101,11 +170,11 @@ def main_loop():
     semaphore = threading.Semaphore(start_workers)
     executor = ThreadPoolExecutor(max_workers=start_workers)
     
-    print(f"🚀 Pipeline Salesforce Iniciado! ({start_workers} threads)")
+    print(f"[OK] Pipeline Salesforce Iniciado! ({start_workers} threads)")
     
     # Iniciar Worker de Análise em paralelo
     import worker
-    print("🤖 Iniciando Worker de Análise (AI) em background...")
+    print("Iniciando Worker de Analise (AI) em background...")
     ai_thread = threading.Thread(target=worker.main_loop, daemon=True)
     ai_thread.start()
     
@@ -126,18 +195,18 @@ def main_loop():
                 time.sleep(5)
                 continue
             
-            print(f"📦 Encontrados {len(cases)} casos pendentes.")
+            print(f"Encontrados {len(cases)} casos pendentes.")
             for case in cases:
                 executor.submit(process_case_task, case)
             
             time.sleep(2)
             
         except KeyboardInterrupt:
-            print("\n⏹️ Pipeline interrompido.")
+            print("\nPipeline interrompido.")
             executor.shutdown(wait=True)
             break
         except Exception as e:
-            print(f"⚠️ Erro no loop principal: {e}")
+            print(f"[AVISO] Erro no loop principal: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":

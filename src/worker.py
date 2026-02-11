@@ -33,16 +33,13 @@ def extract_schema_keys(prompt_text: str) -> list:
     Retorna lista de chaves esperadas
     """
     # #region agent log
-    with open(r'e:\Projetos Cursor\ProcessIA\processia\.cursor\debug.log', 'a', encoding='utf-8') as f:
-        import json as json_module
-        f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"worker_csv.py:extract_schema_keys:entry","message":"Extracting schema keys from prompt","data":{"prompt_length":len(prompt_text),"prompt_preview":prompt_text[:200]},"timestamp":int(time.time()*1000)}) + '\n')
+    # Debug logging removed
     # #endregion
     try:
         # Tentar encontrar chaves listadas explicitamente (mais confiável)
         keys_match = re.search(r'CHAVES OBRIGATÓRIAS[^\n]*\n([^\n]+)', prompt_text)
         # #region agent log
-        with open(r'e:\Projetos Cursor\ProcessIA\processia\.cursor\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"worker_csv.py:extract_schema_keys:keys_match","message":"Checking for CHAVES OBRIGATÓRIAS section","data":{"found":keys_match is not None},"timestamp":int(time.time()*1000)}) + '\n')
+        # Debug logging removed
         # #endregion
         if keys_match:
             keys_str = keys_match.group(1)
@@ -50,8 +47,7 @@ def extract_schema_keys(prompt_text: str) -> list:
             keys = [k.strip() for k in keys_str.split(',')]
             filtered_keys = [k for k in keys if k and not k.startswith('(')]
             # #region agent log
-            with open(r'e:\Projetos Cursor\ProcessIA\processia\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"worker_csv.py:extract_schema_keys:found_keys","message":"Keys extracted from CHAVES section","data":{"keys_str":keys_str,"filtered_keys":filtered_keys},"timestamp":int(time.time()*1000)}) + '\n')
+            # Debug logging removed
             # #endregion
             if filtered_keys:
                 return filtered_keys
@@ -81,18 +77,14 @@ def extract_schema_keys(prompt_text: str) -> list:
                     pass
         
         # #region agent log
-        with open(r'e:\Projetos Cursor\ProcessIA\processia\.cursor\debug.log', 'a', encoding='utf-8') as f:
-            import json as json_module
-            f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"worker_csv.py:extract_schema_keys:no_keys_found","message":"No keys extracted from prompt","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+        # Debug logging removed
         # #endregion
         return []
     except Exception as e:
         # #region agent log
-        with open(r'e:\Projetos Cursor\ProcessIA\processia\.cursor\debug.log', 'a', encoding='utf-8') as f:
-            import json as json_module
-            f.write(json_module.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"worker_csv.py:extract_schema_keys:error","message":"Error extracting keys","data":{"error":str(e)},"timestamp":int(time.time()*1000)}) + '\n')
+        # Debug logging removed
         # #endregion
-        print(f"⚠️ Erro ao extrair chaves do schema: {e}")
+        print(f"[AVISO] Erro ao extrair chaves do schema: {e}")
         return []
 
 def find_key_in_dict(data: dict, key: str) -> any:
@@ -127,7 +119,7 @@ def load_prompt_from_db(supabase_client, projeto_id=None):
         if result and hasattr(result, 'data') and result.data and result.data.get('prompt_text'):
             return result.data['prompt_text']
     except Exception as e:
-        print(f"⚠️ Erro ao carregar prompt do Supabase: {e}")
+        print(f"[AVISO] Erro ao carregar prompt do Supabase: {e}")
     try:
         # Tentar carregar de docs/prompt_custom.txt
         prompt_path = os.path.join("docs", "prompt_custom.txt")
@@ -200,7 +192,7 @@ def save_to_csv(data: dict):
             row = {header: flat_data.get(header, '') for header in all_headers}
             writer.writerow(row)
     
-    print(f"   💾 Salvo em: {CSV_OUTPUT} ({len(all_headers)} colunas)")
+    print(f"   Salvo em: {CSV_OUTPUT} ({len(all_headers)} colunas)")
 
 def apply_regex_fix(raw_text: str, data: dict):
     """
@@ -220,7 +212,7 @@ def apply_regex_fix(raw_text: str, data: dict):
             segurado_val = match.group(1).upper()
             terceiros_val = match.group(2).upper()
             
-            print(f"   🔨 REGEX FIX: Substituindo Cobertura pela leitura direta do texto.")
+            print(f"   REGEX FIX: Substituindo Cobertura pela leitura direta do texto.")
             print(f"      Segurado: {segurado_val} | Terceiros: {terceiros_val}")
             
             if 'analise_cobertura' not in data: data['analise_cobertura'] = {}
@@ -228,7 +220,7 @@ def apply_regex_fix(raw_text: str, data: dict):
                 data['analise_cobertura']['segurado'] = segurado_val
                 data['analise_cobertura']['terceiros'] = terceiros_val
     except Exception as e:
-        print(f"⚠️ Erro no Regex Fix: {e}")
+        print(f"[AVISO] Erro no Regex Fix: {e}")
     
     return data
 
@@ -242,7 +234,7 @@ def process_file_task(record):
     with semaphore:  # Garante limite de threads ativas
         tmp_path = None
         try:
-            print(f"▶️ Processando: {filename}" + (f" [projeto: {str(projeto_id)[:8]}...]" if projeto_id else ""))
+            print(f"Processando: {filename}" + (f" [projeto: {str(projeto_id)[:8]}...]" if projeto_id else ""))
             
             # 1. Marcar como PROCESSANDO
             supabase.table(settings.TABLE_GERENCIAMENTO).update(
@@ -253,21 +245,64 @@ def process_file_task(record):
             if not storage_path:
                 raise ValueError("Caminho do arquivo no storage não encontrado")
 
-            print(f"   ⬇️ Baixando: {storage_path}")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                data = supabase.storage.from_("processos").download(storage_path)
-                tmp.write(data)
-                tmp_path = tmp.name
+            # Detectar tipo de arquivo
+            file_extension = os.path.splitext(storage_path)[1].lower()
+            is_excel = file_extension in ['.xlsx', '.xls']
+            
+            print(f"   Baixando: {storage_path} ({file_extension})")
+            
+            # 2.1 Download do arquivo
+            data = supabase.storage.from_("processos").download(storage_path)
+            
+            # 2.2 Processar de acordo com o tipo
+            if is_excel:
+                # Excel: converter para texto/JSON
+                import pandas as pd
+                import io as io_lib
+                
+                print(f"   Processando Excel...")
+                excel_buffer = io_lib.BytesIO(data)
+                df = pd.read_excel(excel_buffer)
+                
+                # Converter DataFrame para texto estruturado
+                excel_text = "## Dados do Excel:\n\n"
+                excel_text += df.to_string(index=False)
+                excel_text += "\n\n## Dados em JSON:\n"
+                excel_text += df.to_json(orient='records', indent=2, force_ascii=False)
+                
+                raw_text = excel_text
+                tmp_path = None  # Não precisa de arquivo temporário
+            else:
+                # PDF: salvar temporariamente
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(data)
+                    tmp_path = tmp.name
 
             # 3. Carregar prompt do projeto (ou legado id=1)
             current_prompt = load_prompt_from_db(supabase, projeto_id)
             if not current_prompt:
                 raise ValueError("Prompt não configurado. Configure no frontend ou crie prompt_custom.txt")
             
-            print(f"   🤖 Enviando para IA...")
-            prompt_final = f"{current_prompt}\n\nIMPORTANTE: Retorne APENAS o JSON válido, usando EXATAMENTE as chaves definidas no schema acima. Não adicione nem remova chaves."
+            print(f"   Enviando para IA...")
+            prompt_final = f"""{current_prompt}
+
+REGRAS CRÍTICAS DE EXTRAÇÃO:
+1. Retorne APENAS o JSON válido, usando EXATAMENTE as chaves definidas no schema acima.
+2. NÃO adicione nem remova chaves.
+3. Extraia APENAS informações que estão LITERALMENTE escritas no documento.
+4. Se uma informação NÃO estiver explicitamente presente, deixe o campo em branco ("" para strings, null para números/objetos).
+5. NUNCA invente, deduza, presuma, ou interprete informações.
+6. NUNCA use valores de exemplo ou placeholder.
+7. Seja LITERAL - copie o texto exato, não parafraseie."""
             
-            json_text, raw_text = ai_client.analyze_document(tmp_path, prompt_final)
+            # 4. Análise de acordo com o tipo
+            if is_excel:
+                # Excel: enviar texto diretamente para IA
+                print(f"   Enviando Excel para análise...")
+                json_text = ai_client._call_openai(raw_text, prompt_final)
+            else:
+                # PDF: usar analyze_document
+                json_text, raw_text = ai_client.analyze_document(tmp_path, prompt_final)
             data_analise = json.loads(json_text)
 
             # Aplicar Correção Híbrida (Regex sobrepõe AI para campos críticos)
@@ -276,7 +311,7 @@ def process_file_task(record):
             # Validação se IA retornou Lista ao invés de Objeto
             if isinstance(data_analise, list):
                 if len(data_analise) > 0:
-                    print(f"⚠️ Alerta: IA retornou uma lista ({len(data_analise)} itens). Usando o primeiro item.")
+                    print(f"[AVISO] Alerta: IA retornou uma lista ({len(data_analise)} itens). Usando o primeiro item.")
                     data_analise = data_analise[0]
                 else:
                     data_analise = {}
@@ -297,9 +332,10 @@ def process_file_task(record):
                     else:
                         filtered_data[key] = 'N/A'
                 data_analise = filtered_data
-                print(f"   ✓ Filtrado para {len(expected_keys)} chaves esperadas: {', '.join(expected_keys[:5])}...")
+                print(f"   Filtrado para {len(expected_keys)} chaves esperadas: {', '.join(expected_keys[:5])}...")
             
             # Apenas nome do arquivo, data de processamento e campos pedidos pelo usuário (sem detalhes do arquivo)
+            data_analise['numero_caso'] = record.get('caso_id', 'N/A')
             data_analise['arquivo_original'] = filename
             data_analise['data_processamento'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
@@ -315,35 +351,35 @@ def process_file_task(record):
                 if projeto_id:
                     insert_payload['projeto_id'] = projeto_id
                 supabase.table('resultados_analise').insert(insert_payload).execute()
-                print(f"   💾 Resultado salvo no Supabase para exportação")
+                print(f"   Resultado salvo no Supabase para exportacao")
             except Exception as db_error:
-                print(f"⚠️ Erro ao salvar no Supabase (CSV local foi salvo): {db_error}")
+                print(f"[AVISO] Erro ao salvar no Supabase (CSV local foi salvo): {db_error}")
             
             # 5. Remover arquivo do Storage (bucket)
             try:
                 supabase.storage.from_("processos").remove([storage_path])
-                print(f"   🗑️ Arquivo removido do Storage")
+                print(f"   Arquivo removido do Storage")
             except Exception as delete_error:
-                print(f"⚠️ Erro ao remover do bucket (confira RLS DELETE em storage.objects): {delete_error}")
+                print(f"[AVISO] Erro ao remover do bucket (confira RLS DELETE em storage.objects): {delete_error}")
             
             # 6. Remover registro da fila (limpar banco)
             try:
                 supabase.table(settings.TABLE_GERENCIAMENTO).delete().eq("id", doc_id_db).execute()
-                print(f"   🗑️ Registro removido da fila (documento_gerenciamento)")
+                print(f"   Registro removido da fila (documento_gerenciamento)")
             except Exception as db_del_error:
                 # Fallback: marcar como CONCLUIDO se delete falhar (ex.: RLS)
                 try:
                     supabase.table(settings.TABLE_GERENCIAMENTO).update(
                         {"status": "CONCLUIDO", "completed_at": "now()"}
                     ).eq("id", doc_id_db).execute()
-                    print(f"   ⚠️ Delete da fila falhou; status atualizado para CONCLUIDO: {db_del_error}")
+                    print(f"   [AVISO] Delete da fila falhou; status atualizado para CONCLUIDO: {db_del_error}")
                 except Exception as update_error:
-                    print(f"⚠️ Erro ao atualizar/remover da fila: {update_error}")
+                    print(f"[AVISO] Erro ao atualizar/remover da fila: {update_error}")
             
-            print(f"✅ Sucesso: {filename}")
+            print(f"[OK] Sucesso: {filename}")
 
         except Exception as e:
-            print(f"❌ Erro {filename}: {str(e)}")
+            print(f"[ERRO] Erro {filename}: {str(e)}")
             import traceback
             traceback.print_exc()
             error_msg = str(e)[:500]  # Limitar tamanho da mensagem
@@ -354,7 +390,7 @@ def process_file_task(record):
                     {"status": "ERRO", "error_message": error_msg}
                 ).eq("id", doc_id_db).execute()
             except Exception as update_error:
-                print(f"⚠️ Erro ao atualizar status: {update_error}")
+                print(f"[AVISO] Erro ao atualizar status: {update_error}")
             
         finally:
             # Limpar arquivo temporário local
@@ -362,7 +398,7 @@ def process_file_task(record):
                 try:
                     os.remove(tmp_path)
                 except Exception as cleanup_error:
-                    print(f"⚠️ Erro ao limpar arquivo temporário: {cleanup_error}")
+                    print(f"[AVISO] Erro ao limpar arquivo temporário: {cleanup_error}")
 
 def main_loop():
     # Inicialização
@@ -374,7 +410,7 @@ def main_loop():
     try:
         ai_client = OpenAIClient()
     except Exception as e:
-        print(f"❌ Erro ao iniciar OpenAI: {e}")
+        print(f"[ERRO] Erro ao iniciar OpenAI: {e}")
         return
 
     semaphore = threading.Semaphore(settings.MAX_WORKERS)
@@ -382,12 +418,12 @@ def main_loop():
     # Verificar se há prompt configurado (qualquer projeto ou legado)
     test_prompt = load_prompt_from_db(supabase, None)
     if not test_prompt:
-        print("❌ ERRO: Prompt não configurado!")
+        print("[ERRO] Prompt nao configurado!")
         print("   Configure o prompt no frontend ou crie 'prompt_custom.txt'")
         print("   Execute: create_prompt_table.sql no Supabase primeiro")
         return
     
-    print(f"🚀 Worker CSV iniciado!")
+    print("[OK] Worker CSV iniciado!")
     print(f"   - Threads: {settings.MAX_WORKERS}")
     print(f"   - Arquivo de saída: {CSV_OUTPUT}")
     print(f"   - Prompt: Carregado do Supabase (atualizado dinamicamente)")
@@ -417,7 +453,7 @@ def main_loop():
                     response = query.execute()
                     files = response.data if response.data else []
                     if files:
-                        print(f"📦 Processando {len(files)} arquivo(s) (projeto: {projeto_id or 'todos'})")
+                        print(f"Processando {len(files)} arquivo(s) (projeto: {projeto_id or 'todos'})")
                         for file_record in files:
                             executor.submit(process_file_task, file_record)
                         time.sleep(2)
@@ -427,11 +463,11 @@ def main_loop():
             time.sleep(2)
 
         except KeyboardInterrupt:
-            print("\n⏹️ Worker interrompido pelo usuário")
+            print("\nWorker interrompido pelo usuario")
             executor.shutdown(wait=True)
             break
         except Exception as e:
-            print(f"⚠️ Erro no loop: {e}")
+            print(f"[AVISO] Erro no loop: {e}")
             import traceback
             traceback.print_exc()
             time.sleep(5)

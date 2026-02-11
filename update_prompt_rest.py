@@ -39,13 +39,13 @@ IMPORTANTE:
 try:
     print("Tentando atualizar prompt ID 1...")
     data = supabase.table('prompt_config').update({'prompt_text': NEW_PROMPT, 'updated_at': 'now()'}).eq('id', 1).execute()
-    print("✅ Prompt atualizado via REST! Registros:", len(data.data))
+    print("[OK] Prompt atualizado via REST! Registros:", len(data.data))
 except Exception as e:
-    print(f"⚠️ Erro Update: {e}")
+    print(f"[AVISO] Erro Update: {e}")
     # Fallback insert
     try:
         print("Tentando inserir prompt ID 1...")
         supabase.table('prompt_config').insert({'id': 1, 'prompt_text': NEW_PROMPT}).execute()
-        print("✅ Prompt inserido via REST!")
+        print("[OK] Prompt inserido via REST!")
     except Exception as e2:
-        print(f"❌ Erro Insert: {e2}")
+        print(f"[ERRO] Erro Insert: {e2}")

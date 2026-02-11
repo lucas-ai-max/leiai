@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     TABLE_PROCESSAR_AGORA: str = "processar_agora"
 
     # Integrações
-    SALESFORCE_API_URL: str = "https://br98x8qgx8.execute-api.us-east-2.amazonaws.com/staging/salesforce/integracoes/obterArquivos/caso/{case_number}"
+    SALESFORCE_API_URL: str = "https://c22093r8uj.execute-api.us-east-1.amazonaws.com/producao/salesforce/v1/integracoes/obterArquivos/caso/{case_number}"
     SALESFORCE_API_KEY: str = "" # Adicione no .env
     SALESFORCE_PROJECT_ID: str = "00000000-0000-0000-0000-000000000001"  # ID fixo para importações Salesforce
     

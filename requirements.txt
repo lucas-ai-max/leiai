@@ -11,3 +11,4 @@ google-generativeai>=0.8.0
 tenacity
 PyMuPDF>=1.23.0
 playwright>=1.41.0
+docling>=2.0.0

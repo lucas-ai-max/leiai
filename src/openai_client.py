@@ -1,6 +1,6 @@
 import openai
 from config import settings
-import fitz  # PyMuPDF
+# import fitz  # PyMuPDF (Removed)
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 class OpenAIClient:
@@ -10,40 +10,88 @@ class OpenAIClient:
         
         self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model_name = settings.MODEL_OPENAI
-        print(f"✅ Cliente OpenAI inicializado: {self.model_name}")
+        print(f"[OK] Cliente OpenAI inicializado: {self.model_name}")
 
     def analyze_document(self, file_path: str, prompt_text: str) -> str:
         """
-        Analisa documento usando OpenAI GPT-4o.
-        Estratégia: Extrair texto do PDF e enviar como mensagem.
+        Analisa documento usando OpenAI GPT-4o e Docling para extração.
+        Estratégia: Converter PDF para Markdown estruturado e enviar como mensagem.
+        OCR: Usa APENAS OpenAI Vision (gpt-4o), não usa OCR local.
         """
         
-        # 1. Extrair texto do PDF
+        # 1. Extrair texto estruturado do PDF com Docling
+        text_content = None
+        ocr_activated = False
+        
         try:
-            doc = fitz.open(file_path)
-            text_content = ""
-            for page in doc:
-                text_content += page.get_text()
-            doc.close()
+            print(f"   🚀 Iniciando conversão padrão com Docling (SEM OCR local): {file_path}")
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmPipelineOptions, ApiVlmOptions
             
-            # Estimativa básica de tokens (1 token ~= 4 chars)
-            # GPT-4o tem 128k context, mas output é limitado (4k/16k dependendo do modelo)
-            # Se for muito grande, avisar no log
-            token_est = len(text_content) // 4
-            print(f"   📄 Texto extraído: {token_est} tokens (aprox.)")
+            # Tentativa 1: Conversão Padrão SEM OCR (Rápida/Local)
+            try:
+                # Configurar para NÃO usar OCR local
+                pipeline_options_no_ocr = PdfPipelineOptions()
+                pipeline_options_no_ocr.do_ocr = False  # Desabilitar OCR local
+                
+                converter = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options_no_ocr)
+                    }
+                )
+                result = converter.convert(file_path)
+                text_content = result.document.export_to_markdown()
+            except Exception as extraction_error:
+                print(f"   ⚠️ Erro na extração padrão: {extraction_error}")
+                print("   🔄 Ativando OpenAI Vision devido ao erro...")
+                ocr_activated = True
             
-            # DEBUG CRÍTICO: Ver o que está sendo lido
-            print("\n   🔍 --- INÍCIO DO TEXTO EXTRAÍDO (DEBUG) ---")
-            print(text_content[:600]) # Primeiros 600 caracteres
-            print("   🔍 --- FIM DO DEBUG ---\n")
+            # Validação: Se não há texto suficiente OU houve erro, tentar OCR via OpenAI (VLM)
+            if ocr_activated or (text_content and len(text_content.strip()) < 50):
+                if not ocr_activated:
+                    print("   [AVISO] Texto insuficiente (< 50 chars). Ativando OpenAI Vision...")
+                
+                # Configurar Pipeline VLM com OpenAI (DESABILITA OCR LOCAL!)
+                pipeline_options = PdfPipelineOptions()
+                pipeline_options.do_ocr = False  # Não usar OCR local (RapidOCR)
+                pipeline_options.do_table_structure = True
+                pipeline_options.table_structure_options.do_cell_matching = True
+                
+                # Configurar VLM para usar OpenAI gpt-4o
+                pipeline_options.vlm_options = VlmPipelineOptions(
+                    api_options=ApiVlmOptions(
+                        api_key=settings.OPENAI_API_KEY,
+                        model="gpt-4o",
+                        prompt="Extract all text from this document.",
+                        response_format="markdown"
+                    )
+                )
+                
+                # Re-instanciar conversor com opções VLM
+                converter_vlm = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                    }
+                )
+                
+                print(f"   👁️ Iniciando OCR com OpenAI Vision (gpt-4o)...")
+                result_vlm = converter_vlm.convert(file_path)
+                text_content = result_vlm.document.export_to_markdown()
+                print("   ✅ OCR com OpenAI Vision concluído.")
 
-            # Validação anti-alucinação: Se não há texto suficiente, é provável que seja imagem/scan.
-            if len(text_content.strip()) < 50:
-                print("   ⚠️ AVISO: Texto extraído insuficiente (< 50 chars). Documento pode ser imagem.")
-                raise ValueError("DOC_VAZIO: Documento escaneado ou imagem sem camada de texto (OCR necessário).")
+            # Estimativa básica de tokens
+            token_est = len(text_content) // 4
+            print(f"   📄 Markdown extraído: {token_est} tokens (aprox.)")
             
+            # DEBUG CRÍTICO
+            print("\n   🔍 --- INÍCIO DO MARKDOWN EXTRAÍDO (DEBUG) ---")
+            print(text_content[:600])
+            print("   🔍 --- FIM DO DEBUG ---\n")
+                
         except Exception as e:
-            raise ValueError(f"Erro ao ler PDF: {e}")
+            print(f"[ERRO] Falha na extração com Docling (incluindo OCR): {e}")
+            raise ValueError(f"Erro ao processar PDF com Docling: {e}")
 
         # 2. Enviar para OpenAI
         json_resp = self._call_openai(text_content, prompt_text)
@@ -55,11 +103,21 @@ class OpenAIClient:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "Você é um assistente jurídico especializado em análise de documentos. Responda estritamente em JSON."},
+                    {
+                        "role": "system", 
+                        "content": """Você é um assistente jurídico especializado em análise de documentos. 
+
+REGRAS ESTRITAS:
+1. Responda estritamente em JSON.
+2. Extraia APENAS informações que estão EXPLICITAMENTE presentes no documento.
+3. NUNCA invente, deduza, ou presuma informações.
+4. Se uma informação não estiver no documento, deixe o campo em branco ("" ou null).
+5. Seja literal - copie exatamente o que está escrito, não interprete."""
+                    },
                     {"role": "user", "content": f"{prompt}\n\nDOCUMENTO:\n{text}"}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.1
+                temperature=0.0  # Zero temperature for maximum determinism
             )
             
             content = response.choices[0].message.content
@@ -71,3 +129,63 @@ class OpenAIClient:
         except Exception as e:
             # Tratamento básico de erros
             raise ValueError(f"Erro na OpenAI API: {e}")
+
+    def extract_text_with_vision(self, pdf_path: str) -> str:
+        """
+        Extract text from PDF using OpenAI Vision API directly (gpt-4o-mini).
+        Converts PDF first page to image since Vision API only accepts images.
+        Returns plain text without JSON formatting.
+        """
+        try:
+            import base64
+            import fitz  # PyMuPDF
+            import io
+            from PIL import Image
+            
+            # Convert first page of PDF to image
+            print(f"   🖼️ [DEBUG] Convertendo PDF para imagem...")
+            doc = fitz.open(pdf_path)
+            if len(doc) < 1:
+                raise ValueError("PDF vazio ou sem páginas")
+            
+            # Render first page to pixmap (image)
+            page = doc[0]
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x resolution for better OCR
+            
+            # Convert pixmap to PNG bytes
+            img_bytes = pix.pil_tobytes(format="PNG")
+            
+            # Convert to base64
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            print(f"   ✅ [DEBUG] Imagem criada: {len(img_base64)} chars base64")
+            
+            # Use Vision API with image input
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Extraia TODO o texto desta imagem. Retorne APENAS o texto bruto, exatamente como aparece, sem formatação adicional."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{img_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=4000,
+                temperature=0.0
+            )
+            
+            extracted_text = response.choices[0].message.content
+            return extracted_text if extracted_text else ""
+            
+        except Exception as e:
+            print(f"   ❌ [DEBUG] Erro na extração Vision API: {type(e).__name__}: {e}")
+            raise ValueError(f"Erro ao extrair texto com Vision API: {e}")
